@@ -4,6 +4,7 @@ Commandes disponibles :
     astro doctor      vérifie que les moteurs sont installés
     astro profiles    liste les profils disponibles
     astro run         lance un traitement
+    astro wizard      assistant interactif de création de profils
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from rich.table import Table
 from astro_pipeline import pipeline
 from astro_pipeline.config import ProfileNotFoundError, list_profiles, load_profile
 from astro_pipeline.engines import graxpert, siril
+from astro_pipeline.wizard import wizard_command
 
 app = typer.Typer(
     add_completion=False,
@@ -227,6 +229,17 @@ def run(
 
     if result.log_path:
         console.print(f"[dim]Log complet : {result.log_path}[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# wizard
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def wizard() -> None:
+    """Assistant interactif : crée vos profils setup et target en 2 minutes."""
+    wizard_command()
 
 
 if __name__ == "__main__":

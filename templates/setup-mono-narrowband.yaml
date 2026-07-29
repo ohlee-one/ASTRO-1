@@ -1,0 +1,38 @@
+# ============================================================================
+# TEMPLATE SETUP — Caméra monochrome avec filtres étroits (Ha, OIII, SII)
+# ============================================================================
+# Pour les caméras monochromes (ASI294MM, ASI533MM, ASI2600MM...) utilisées
+# avec une roue à filtres et des filtres bande étroite (3-7 nm).
+#
+# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
+# ============================================================================
+
+name: "Caméra mono + filtres étroits (template)"
+
+sensor:
+  # Caméra monochrome = pas de matrice de Bayer.
+  color: false
+  # Ignoré pour une caméra mono (pas de démosaïçage).
+  bayer_pattern: "auto"
+  equalize_cfa: false
+
+optics:
+  focal_length_mm: 250    # focale en mm
+  aperture_mm: 51         # diamètre en mm
+  pixel_size_um: 3.76     # taille des photosites en µm
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # Avec une caméra mono, on shoot généralement des bias/offsets séparés.
+  use_biases: true
+
+  # Les darks/flats individuels sont la norme en mono (pas de pré-empilement).
+  use_premade_masters: false
+
+  # Correction cosmétique : utile en mono pour les pixels chauds résiduels.
+  cosmetic_correction: true

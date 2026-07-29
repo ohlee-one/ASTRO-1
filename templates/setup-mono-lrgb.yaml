@@ -1,0 +1,40 @@
+# ============================================================================
+# TEMPLATE SETUP — Caméra monochrome avec filtres LRGB
+# ============================================================================
+# Pour les caméras monochromes (ASI294MM, ASI2600MM, ASI533MM...) avec une
+# roue à filtres LRGB classique. Pas de matrice de Bayer → pas de démosaïçage.
+#
+# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
+# Modifie : name, focal_length_mm, aperture_mm, pixel_size_um, use_premade_masters.
+# ============================================================================
+
+name: "Caméra mono + LRGB (template)"
+
+sensor:
+  # Caméra monochrome = pas de matrice de Bayer.
+  color: false
+  # Ignoré pour une caméra mono (pas de démosaïçage).
+  bayer_pattern: "auto"
+  # Ignoré pour une caméra mono.
+  equalize_cfa: false
+
+optics:
+  focal_length_mm: 250    # focale du télescope/lunette en mm
+  aperture_mm: 51         # diamètre en mm
+  pixel_size_um: 4.63     # taille des photosites en µm
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # Avec une caméra mono, on shootes généralement des bias séparés.
+  use_biases: true
+
+  # Si ton logiciel d'acquisition empile déjà les darks/flats, mets à true.
+  use_premade_masters: false
+
+  # Correction cosmétique : nettoie les pixels chauds résiduels.
+  cosmetic_correction: true

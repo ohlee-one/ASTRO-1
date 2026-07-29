@@ -1,8 +1,8 @@
 # ============================================================================
-# TEMPLATE — Galaxie en RGB (couleur classique)
+# TEMPLATE — Galaxie en RGB
 # ============================================================================
-# Pour les caméras couleur sans filtre bande étroite, ou les caméras
-# mono avec filtres LRGB.
+# Les galaxies sont des objets étendus à faible surface brillante. Le défi :
+# révéler les bras spiraux et les régions HII sans sur-briller le noyau.
 #
 # Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
 # ============================================================================
@@ -29,6 +29,8 @@ post:
     correction: "subtraction"
 
   denoise:
+    # Les galaxies ont un signal faible → débruitage utile mais délicat.
+    # Si activé, reste très doux (0.3 max) pour ne pas perdre les bras spiraux.
     enabled: false
     strength: 0.3
     batch_size: 8
@@ -41,20 +43,26 @@ post:
   stretch:
     enabled: true
     method: "autostretch"
+    # linked=true : préserve la couleur naturelle des galaxies (coeur jaune,
+    # bras bleus, régions HII roses).
     linked: true
-    shadows_clip: -2.8
-    target_bg: 0.25
+    # shadows_clip plus négatif pour préserver les extensions faibles des bras.
+    shadows_clip: -3.0
+    target_bg: 0.22
 
   color:
     enabled: true
     # Les galaxies ont moins de vert résiduel que les nébuleuses → average.
     rmgreen: true
     rmgreen_type: "average"
+    # Saturation modérée : les galaxies ont des couleurs subtiles.
     saturation_boost: 0.6
     saturation_threshold: 0.5
     hue_range: 6
+    # Pas de boost ciblé : on veut des couleurs naturelles.
     target_hue_boost: 0.0
     blue_shift: 0.0
+    # Assombrir le fond pour faire ressortir les bras spiraux faibles.
     background_clip: 0.03
 
   sharpening:

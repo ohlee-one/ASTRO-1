@@ -1,0 +1,42 @@
+# ============================================================================
+# TEMPLATE SETUP — Caméra couleur avec filtre dual-band (L-eXtreme, etc.)
+# ============================================================================
+# Pour les caméras couleur (ASI294MC, ASI533MC, ASI2600MC...) utilisées avec
+# un filtre dual-band qui ne laisse passer que Ha + OIII.
+#
+# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
+# Modifie : name, focal_length_mm, aperture_mm, pixel_size_um, use_premade_masters.
+# ============================================================================
+
+name: "Caméra couleur + dual-band (template)"
+
+sensor:
+  # Caméra couleur = matrice de Bayer. Siril va dématricer.
+  color: true
+  # "auto" = Siril lit le pattern depuis le header FITS de l'ASIAIR/NINA.
+  bayer_pattern: "auto"
+  # Égalise le signal avant démosaïçage (recommandé pour les caméras couleur).
+  equalize_cfa: true
+
+optics:
+  focal_length_mm: 250    # focale du télescope/lunette en mm
+  aperture_mm: 51         # diamètre en mm
+  pixel_size_um: 4.63     # taille des photosites en µm
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # Si tu ne shootes pas de bias séparés (dark flat suffit), mets false.
+  use_biases: false
+
+  # ⚠️ Si ton ASIAIR / logiciel d'acquisition empile déjà tes darks et flats
+  # (MasterDark_*, MasterFlat_*), mets à true pour les utiliser directement.
+  # Si tu as les darks/flats individuels, mets à false.
+  use_premade_masters: false
+
+  # Correction cosmétique : nettoie les pixels chauds résiduels.
+  cosmetic_correction: true

@@ -102,16 +102,41 @@ Astro-1 fonctionne avec deux types de profils YAML :
 
 ### Templates prêts à copier
 
-Le dossier `templates/` contient des profils de départ par type d'objet :
+Le dossier `templates/` contient des profils de départ optimisés par type
+d'objet et de matériel :
+
+**Setups (matériel) :**
 
 | Template | Usage |
 |---|---|
-| `setup-example.yaml` | Profil setup à personnaliser avec votre matériel |
-| `nebula-narrowband.yaml` | Nébuleuse en bande étroite (L-eXtreme, L-Ultimate…) |
-| `galaxy-rgb.yaml` | Galaxie en couleur classique |
-| `cluster-rgb.yaml` | Amas d'étoiles en couleur |
+| `setup-color-dualband.yaml` | Caméra couleur + filtre dual-band (L-eXtreme, L-Ultimate) |
+| `setup-color-lp.yaml` | Caméra couleur + filtre LP/UV-IR (large bande) |
+| `setup-mono-narrowband.yaml` | Caméra mono + filtres bande étroite (Ha, OIII, SII) |
+| `setup-mono-lrgb.yaml` | Caméra mono + filtres LRGB |
+| `setup-dslr.yaml` | DSLR / appareil photo |
 
-**Pour démarrer :** copiez les templates dans `profiles/`, renommez-les, ajustez les valeurs.
+**Targets (cibles) :**
+
+| Template | Usage |
+|---|---|
+| `nebula-narrowband.yaml` | Nébuleuse en bande étroite (Ha/OIII) |
+| `nebula-rgb.yaml` | Nébuleuse en RGB large bande |
+| `galaxy-rgb.yaml` | Galaxie |
+| `cluster-rgb.yaml` | Amas d'étoiles (ouvert ou globulaire) |
+| `comet-rgb.yaml` | Comète |
+| `snr-narrowband.yaml` | Reste de supernova (Veil, Cygnus Loop…) |
+
+### Assistant interactif (wizard)
+
+Pour démarrer encore plus vite, utilisez l'assistant interactif :
+
+```bash
+uv run astro wizard
+```
+
+Il pose quelques questions (type de caméra, filtre, type de cible, focale,
+diamètre, taille des photosites) et génère automatiquement les profils YAML
+optimisés dans `profiles/`. Plus besoin de copier et éditer les templates à la main.
 
 ---
 

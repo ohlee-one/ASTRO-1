@@ -1,0 +1,84 @@
+# ============================================================================
+# TEMPLATE — Nébuleuse en RGB large bande
+# ============================================================================
+# Pour les caméras couleur sans filtre bande étroite (LP filter, UV/IR cut).
+# Le signal Ha et OIII est présent mais mélangé avec le signal large bande.
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Nébuleuse RGB large bande (template)"
+
+processing:
+  # Mode RGB standard : pas d'extraction Ha/OIII, on traite l'image couleur
+  # directement.
+  mode: "rgb"
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    # Les nébuleuses large bande ont souvent un gradient de pollution lumineuse
+    # plus marqué qu'en bande étroite → lissage modéré.
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    # Désactivé par défaut (bug onnxruntime sur Apple Silicon).
+    # Le signal large bande est plus bruité que le bande étroite, donc le
+    # débruitage est plus utile ici. Active si ton GraXpert fonctionne.
+    enabled: false
+    strength: 0.4
+    batch_size: 8
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    # linked=true : préserve la balance des blancs. Important en large bande
+    # car les canaux sont plus équilibrés qu'en bande étroite.
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: true
+    # rmgreen : les nébuleuses en large bande ont souvent une dominante verte
+    # due à la pollution lumineuse. Mode maximum pour bien la supprimer.
+    rmgreen: true
+    rmgreen_type: "maximum"
+    saturation_boost: 0.7
+    saturation_threshold: 0.5
+    hue_range: 6
+    # Pas de boost ciblé en large bande : les couleurs sont plus naturelles.
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    # Assombrir légèrement le fond pour faire ressortir la nébulosité.
+    background_clip: 0.03
+
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

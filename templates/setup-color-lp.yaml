@@ -1,19 +1,19 @@
 # ============================================================================
-# TEMPLATE — Profil setup (ton matériel)
+# TEMPLATE SETUP — Caméra couleur avec filtre LP/UV-IR (large bande)
 # ============================================================================
-# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
-# Un setup = ton télescope + monture + caméra. Ça change rarement.
+# Pour les caméras couleur (ASI294MC, ASI533MC, ASI2600MC...) sans filtre
+# dual-band, juste un filtre anti-pollution lumineuse ou UV/IR cut.
 #
-# Référence : profiles/setups/redcat51-asi294mc.yaml pour un exemple réel.
+# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
+# Modifie : name, focal_length_mm, aperture_mm, pixel_size_um, use_premade_masters.
 # ============================================================================
 
-name: "Mon setup (template)"
+name: "Caméra couleur + LP/UV-IR (template)"
 
 sensor:
-  # true = caméra couleur (matrice de Bayer). false = caméra monochrome.
+  # Caméra couleur = matrice de Bayer. Siril va dématricer.
   color: true
   # "auto" = Siril lit le pattern depuis le header FITS.
-  # Sinon : "RGGB", "BGGR", "GRBG", "GBRG".
   bayer_pattern: "auto"
   # Égalise le signal avant démosaïçage (recommandé pour les caméras couleur).
   equalize_cfa: true
@@ -30,8 +30,7 @@ folders:
   biases: "biases"
 
 calibration:
-  # true si tu shootes des bias/offsets séparés. false si tu utilises
-  # des darks flats (le dark contient déjà le bias).
+  # Si tu ne shootes pas de bias séparés (dark flat suffit), mets false.
   use_biases: false
 
   # ⚠️ Si ton ASIAIR / logiciel d'acquisition empile déjà tes darks et flats

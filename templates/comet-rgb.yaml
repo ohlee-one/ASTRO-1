@@ -1,0 +1,87 @@
+# ============================================================================
+# TEMPLATE — Comète
+# ============================================================================
+# Les comètes sont des cibles mobiles : elles se déplacent entre les poses.
+# L'empilement doit se faire sur la comète (et non sur les étoiles) pour
+# éviter que la comète devienne un trait. Siril gère ça via l'option de
+# comète stacking, mais notre pipeline aligne sur les étoiles par défaut.
+#
+# ⚠️ Ce template est un point de départ. Le comète stacking nécessite une
+# intervention manuelle dans Siril (ou un mode dédié à venir dans Astro-1).
+# Pour l'instant, ce template optimise le rendu (couleur, queue, noyau).
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Comète (template)"
+
+processing:
+  mode: "rgb"
+
+stacking:
+  rejection: "winsorized"
+  # La comète bouge → le rejet doit être prudent pour ne pas rejeter le signal
+  # de la comète qui se déplace.
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 5
+
+post:
+  background_extraction:
+    enabled: true
+    # La queue de la comète est diffuse → lissage élevé pour ne pas la manger.
+    smoothing: 0.5
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    # La comète a un fort gradient de luminosité (noyau vs queue).
+    # shadows_clip plus négatif pour préserver la queue.
+    linked: true
+    shadows_clip: -3.2
+    target_bg: 0.2
+
+  color:
+    enabled: true
+    # Les comètes ont souvent une queue verdâtre (ions) et une queue blanche
+    # (poussière). rmgreen en mode average pour ne pas trop supprimer le vert
+    # de la queue ionique.
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.5
+    saturation_threshold: 0.5
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    # Assombrir le fond pour isoler la comète.
+    background_clip: 0.04
+
+  sharpening:
+    # Sharpening doux sur le noyau de la comète.
+    enabled: true
+    method: "unsharp"
+    sigma: 0.8
+    amount: 0.4
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

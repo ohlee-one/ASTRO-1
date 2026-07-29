@@ -1,5 +1,5 @@
 # ============================================================================
-# TEMPLATE — Amas d'étoiles en RGB
+# TEMPLATE — Amas d'étoiles (ouvert ou globulaire)
 # ============================================================================
 # Les amas sont denses en étoiles et n'ont pas de nébuleuse. Le traitement
 # est plus simple : moins de saturation, pas de rmgreen agressif, pas de
@@ -29,8 +29,10 @@ post:
     correction: "subtraction"
 
   denoise:
+    # Pas de débruitage sur un amas : les étoiles sont ponctuelles et le
+    # débruitage flouterait leurs bords.
     enabled: false
-    strength: 0.3
+    strength: 0.2
     batch_size: 8
 
   starnet:
@@ -43,7 +45,8 @@ post:
     method: "autostretch"
     linked: true
     shadows_clip: -2.8
-    target_bg: 0.25
+    # target_bg légèrement plus sombre pour un fond noir naturel.
+    target_bg: 0.2
 
   color:
     enabled: true
@@ -56,16 +59,19 @@ post:
     hue_range: 6
     target_hue_boost: 0.0
     blue_shift: 0.0
+    # Pas de background_clip : on garde un fond naturel.
     background_clip: 0.0
 
   sharpening:
     # Les étoiles sont ponctuelles → peu de sharpening nécessaire.
+    # Un léger unsharp peut aider à les rendre plus nettes.
     enabled: true
     method: "unsharp"
     sigma: 0.8
     amount: 0.3
 
   star_reduction:
+    # ⚠️ Ne pas réduire les étoiles sur un amas : c'est le sujet principal !
     enabled: false
     amount: 0.5
 

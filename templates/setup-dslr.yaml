@@ -1,0 +1,40 @@
+# ============================================================================
+# TEMPLATE SETUP — DSLR / Camera hybride (Canon, Nikon, Sony...)
+# ============================================================================
+# Pour les appareils photo reflex ou hybrides utilisés en astrophotographie.
+# Ces caméras ont une matrice de Bayer couleur et produisent des FITS (ou RAW)
+# via des logiciels comme NINA, APT, BackyardEOS...
+#
+# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
+# Modifie : name, focal_length_mm, aperture_mm, pixel_size_um.
+# ============================================================================
+
+name: "DSLR/Hybride (template)"
+
+sensor:
+  # DSLR = capteur couleur (matrice de Bayer).
+  color: true
+  # "auto" = Siril lit le pattern depuis le header FITS.
+  bayer_pattern: "auto"
+  equalize_cfa: true
+
+optics:
+  focal_length_mm: 200    # focale de l'objectif ou télescope en mm
+  aperture_mm: 71         # diamètre en mm (ou ouverture, ex: f/2.8 → 200/2.8=71)
+  pixel_size_um: 5.95     # taille des photosites en µm (voir specs de ton DSLR)
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # Les DSLR n'ont généralement pas de bias séparé → false.
+  use_biases: false
+
+  # Les DSLR produisent des darks/flats individuels → false.
+  use_premade_masters: false
+
+  # Correction cosmétique : utile sur les DSLR (pixels chauds fréquents).
+  cosmetic_correction: true

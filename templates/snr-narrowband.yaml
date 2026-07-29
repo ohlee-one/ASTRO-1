@@ -1,0 +1,98 @@
+# ============================================================================
+# TEMPLATE — Reste de supernova (SNR) en bande étroite
+# ============================================================================
+# Les restes de supernova (Crochet, Veil, Cygnus Loop...) sont étendus et
+# filamenteux. Le signal OIII domine souvent, avec du Ha dans les filaments.
+# Le défi : révéler les filaments fins sans noyer le tout dans le bruit.
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Reste de supernova bande étroite (template)"
+
+processing:
+  mode: "haoiii"
+  # Les restes de SNR sont étendus → on agrandit le Ha pour matcher l'OIII
+  # et préserver les filaments fins.
+  resample: "ha"
+  linear_match: true
+  linear_match_low: 0.0
+  # Les filaments OIII peuvent être plus faibles que le Ha → on monte le
+  # match_high pour mieux équilibrer.
+  linear_match_high: 0.95
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    # Les restes de SNR sont très étendus et se confondent avec le fond.
+    # Lissage élevé pour ne pas manger les filaments.
+    smoothing: 0.5
+    correction: "subtraction"
+
+  denoise:
+    # Désactivé par défaut (bug onnxruntime sur Apple Silicon).
+    # Les filaments fins sont très sensibles au débruitage → si activé,
+    # reste très doux (0.3 max).
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    # linked=true : préserve la couleur des filaments (Ha=rouge, OIII=cyan).
+    linked: true
+    # shadows_clip très négatif pour préserver les filaments faibles.
+    shadows_clip: -3.2
+    target_bg: 0.2
+
+  haoiii_composition:
+    enabled: true
+    use_ha_as_luminance: true
+
+  color:
+    enabled: true
+    # Les restes de SNR ont souvent du vert résiduel dans les filaments.
+    rmgreen: true
+    rmgreen_type: "maximum"
+    # Saturation modérée pour ne pas artificialiser les filaments.
+    saturation_boost: 0.7
+    saturation_threshold: 0.3
+    hue_range: 6
+    # Boost ciblé sur le cyan (OIII des filaments) pour révéler les structures.
+    target_hue_boost: 0.6
+    target_hue_range: 3
+    target_hue_threshold: 0.3
+    blue_shift: 0.0
+    # Assombrir le fond pour faire ressortir les filaments faibles.
+    background_clip: 0.04
+
+  sharpening:
+    # Les filaments bénéficient d'un sharpening modéré pour les révéler.
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.6
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true
