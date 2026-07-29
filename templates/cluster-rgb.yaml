@@ -1,0 +1,75 @@
+# ============================================================================
+# TEMPLATE — Amas d'étoiles en RGB
+# ============================================================================
+# Les amas sont denses en étoiles et n'ont pas de nébuleuse. Le traitement
+# est plus simple : moins de saturation, pas de rmgreen agressif, pas de
+# background_clip (on veut garder un fond naturel).
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Amas d'étoiles RGB (template)"
+
+processing:
+  mode: "rgb"
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: true
+    # Les amas ont des étoiles colorées (bleues, jaunes, rouges) qu'on
+    # veut préserver. Saturation modérée, pas de rmgreen agressif.
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.5
+    saturation_threshold: 0.5
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    background_clip: 0.0
+
+  sharpening:
+    # Les étoiles sont ponctuelles → peu de sharpening nécessaire.
+    enabled: true
+    method: "unsharp"
+    sigma: 0.8
+    amount: 0.3
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

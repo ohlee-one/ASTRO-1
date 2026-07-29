@@ -1,0 +1,108 @@
+# ============================================================================
+# PROFIL CIBLE — décrit CE QUE TU PHOTOGRAPHIES CE SOIR
+#
+# C'est ici que tu passes ton temps à ajuster. Duplique ce fichier par type de
+# cible (nébuleuse en bande étroite, galaxie, amas globulaire, comète...).
+#
+# Nom du fichier = nom à passer à --target (ici : nebuleuse-ha)
+# ============================================================================
+
+name: "Nébuleuse en Ha — poses longues"
+
+# --- Empilement --------------------------------------------------------------
+stacking:
+  # Méthode de rejet des pixels aberrants (avions, satellites, rayons cosmiques).
+  #   winsorized : le meilleur compromis par défaut, dès ~15 images
+  #   linear     : bon pour peu d'images (moins de 15)
+  #   percentile : pour très peu d'images (moins de 8)
+  #   none       : aucun rejet, à éviter
+  rejection: "winsorized"
+
+  # Seuils de rejet, en écarts-types. Format : [bas, haut]
+  #   Valeurs plus BASSES = rejet plus agressif = plus de pixels écartés.
+  #   [3, 3] est le réglage standard.
+  #   Sur une cible avec beaucoup de passages de satellites, essaie [3, 2.5].
+  sigma_low: 3.0
+  sigma_high: 3.0
+
+  # Normalisation avant empilement. Compense les variations de fond de ciel
+  # entre les poses (lune qui se lève, transparence variable...).
+  #   addscale : recommandé pour du ciel profond
+  #   additive : si tes poses sont très homogènes
+  #   none     : jamais, sauf cas très particulier
+  normalization: "addscale"
+
+# --- Registration (alignement) ----------------------------------------------
+registration:
+  # Nombre minimum d'étoiles détectées pour qu'une pose soit conservée.
+  # Si trop de poses sont rejetées, baisse cette valeur.
+  min_stars: 10
+
+# --- Post-traitement ---------------------------------------------------------
+post:
+  # ======================================================================
+  # Phase 2 : GraXpert (sur le linéaire, AVANT le stretch)
+  # ======================================================================
+  background_extraction:
+    enabled: true
+    # Lissage du modèle de fond de ciel, entre 0.0 et 1.0.
+    # Plus haut = modèle plus doux, qui suit moins les détails.
+    # 0.1 à 0.3 convient à la plupart des gradients.
+    smoothing: 0.1
+    # "subtraction" pour un gradient additif (pollution lumineuse) → cas normal
+    # "division"    pour un gradient multiplicatif (vignettage résiduel)
+    correction: "subtraction"
+
+  denoise:
+    enabled: true
+    # Force du débruitage, entre 0.0 et 1.0.
+    # ⚠️ Commence BAS. Au-delà de 0.6 sur une nébuleuse, tu perds les
+    # extensions faibles et l'image prend un aspect « plastique ».
+    strength: 0.5
+    # Nombre de tuiles traitées en parallèle (1 à 32).
+    # Avec 36 Go de mémoire unifiée, tu peux monter à 8 ou 16 sans risque.
+    batch_size: 8
+
+  # ======================================================================
+  # Phase 3 : post-traitement non-linéaire (Siril, APRÈS le stretch)
+  # ======================================================================
+
+  # StarNet++ : sépare les étoiles du nébuleux pour les traiter séparément.
+  starnet:
+    enabled: true
+    upscale: false
+    stretch_linear: false
+
+  # Stretch : linéaire → non-linéaire. Rend l'image visible.
+  # Autostretch = détection automatique des paramètres (le plus simple).
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true       # préserve la balance des blancs
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  # Couleur : suppression de la dominante verte + boost de saturation.
+  color:
+    enabled: true
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.5
+
+  # Sharpening : unsharp mask pour renforcer les détails.
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  # Réduction des étoiles : réduit légèrement la taille des étoiles.
+  star_reduction:
+    enabled: true
+    amount: 0.5
+
+  # Export final : TIFF 16-bit avec compression LZW.
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

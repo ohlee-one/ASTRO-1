@@ -1,0 +1,90 @@
+# ============================================================================
+# TEMPLATE — Nébuleuse en bande étroite (Ha/OIII ou Ha seul)
+# ============================================================================
+# Pour les filtres dual-band (L-eXtreme, L-Ultimate, etc.) ou caméras
+# monochromes avec filtres étroits séparés.
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# Modifie au moins : name, resample, linear_match_high si besoin.
+# ============================================================================
+
+name: "Nébuleuse bande étroite (template)"
+
+processing:
+  # Extraction Ha/OIII depuis la matrice de Bayer (filtre dual-band).
+  # Si tu as une caméra mono avec filtres séparés, utilise "rgb" à la place.
+  mode: "haoiii"
+  # "ha" = agrandir le Ha pour matcher l'OIII (recommandé si Ha plus détaillé)
+  # "oiii" = inverse. "none" = pas de resample.
+  resample: "ha"
+  linear_match: true
+  linear_match_low: 0.0
+  linear_match_high: 0.92
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    smoothing: 0.5
+    correction: "subtraction"
+
+  denoise:
+    # ⚠️ Le débruitage IA de GraXpert peut crasher sur Apple Silicon (bug onnxruntime).
+    # Désactivé par défaut. Active si ton GraXpert fonctionne en CLI.
+    enabled: false
+    strength: 0.5
+    batch_size: 8
+
+  starnet:
+    # ⚠️ Désactivé : la recombinaison starless+starmask n'est pas encore
+    # implémentée. L'activation produit une image sans étoiles.
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  haoiii_composition:
+    enabled: true
+    use_ha_as_luminance: true
+
+  color:
+    enabled: true
+    rmgreen: true
+    rmgreen_type: "maximum"
+    saturation_boost: 0.9
+    saturation_threshold: 0.5
+    hue_range: 6
+    target_hue_boost: 1.0
+    target_hue_range: 5
+    target_hue_threshold: 0.5
+    blue_shift: 0.0
+    background_clip: 0.04
+
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

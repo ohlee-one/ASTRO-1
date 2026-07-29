@@ -1,0 +1,43 @@
+# ============================================================================
+# TEMPLATE — Profil setup (ton matériel)
+# ============================================================================
+# Copie ce fichier dans profiles/setups/ et renomme-le selon ton matériel.
+# Un setup = ton télescope + monture + caméra. Ça change rarement.
+#
+# Référence : profiles/setups/redcat51-asi294mc.yaml pour un exemple réel.
+# ============================================================================
+
+name: "Mon setup (template)"
+
+sensor:
+  # true = caméra couleur (matrice de Bayer). false = caméra monochrome.
+  color: true
+  # "auto" = Siril lit le pattern depuis le header FITS.
+  # Sinon : "RGGB", "BGGR", "GRBG", "GBRG".
+  bayer_pattern: "auto"
+  # Égalise le signal avant démosaïçage (recommandé pour les caméras couleur).
+  equalize_cfa: true
+
+optics:
+  focal_length_mm: 250    # focale du télescope/lunette en mm
+  aperture_mm: 51         # diamètre en mm
+  pixel_size_um: 4.63     # taille des photosites en µm
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # true si tu shootes des bias/offsets séparés. false si tu utilises
+  # des darks flats (le dark contient déjà le bias).
+  use_biases: false
+
+  # ⚠️ Si ton ASIAIR / logiciel d'acquisition empile déjà tes darks et flats
+  # (MasterDark_*, MasterFlat_*), mets à true pour les utiliser directement.
+  # Si tu as les darks/flats individuels, mets à false.
+  use_premade_masters: false
+
+  # Correction cosmétique : nettoie les pixels chauds résiduels.
+  cosmetic_correction: true

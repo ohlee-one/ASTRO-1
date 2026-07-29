@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# uv
+# uv.lock est commité : il fige les versions pour reproductibilité
+
+# macOS
+.DS_Store
+
+# Sessions de traitement (très volumineuses)
+# Chaque session contient les FITS bruts, les fichiers intermédiaires et les
+# images finales. On ne commit jamais ça.
+/*/lights/
+/*/darks/
+/*/flats/
+/*/biases/
+/*/output/
+/*/process/
+/*/logs/
+
+# FITS et images (ne pas committer les données astro)
+*.fit
+*.fits
+*.tif
+*.tiff
+*.xisf
+
+# Logs
+*.log
+
+# Contexte local (assistant IA)
+CONTEXT.md

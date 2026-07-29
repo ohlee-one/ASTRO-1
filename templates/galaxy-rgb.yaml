@@ -1,0 +1,75 @@
+# ============================================================================
+# TEMPLATE — Galaxie en RGB (couleur classique)
+# ============================================================================
+# Pour les caméras couleur sans filtre bande étroite, ou les caméras
+# mono avec filtres LRGB.
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Galaxie RGB (template)"
+
+processing:
+  mode: "rgb"
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    # Les galaxies ont souvent un gradient doux → lissage modéré.
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: true
+    # Les galaxies ont moins de vert résiduel que les nébuleuses → average.
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.6
+    saturation_threshold: 0.5
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    background_clip: 0.03
+
+  sharpening:
+    # Les galaxies bénéficient d'un sharpening un peu plus poussé pour
+    # révéler les bras spiraux et les régions HII.
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.6
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

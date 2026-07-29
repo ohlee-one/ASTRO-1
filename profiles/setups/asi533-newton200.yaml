@@ -1,0 +1,51 @@
+# ============================================================================
+# PROFIL SETUP — décrit TON MATÉRIEL
+#
+# Ce fichier change rarement : une fois que ton setup est décrit correctement,
+# tu n'y touches plus. Duplique-le si tu changes de caméra ou de télescope.
+#
+# Nom du fichier = nom à passer à --setup (ici : asi533-newton200)
+# ============================================================================
+
+name: "ASI533MC Pro + Newton 200/1000"
+
+# --- Capteur -----------------------------------------------------------------
+sensor:
+  # true  = capteur couleur (OSC), il faut dématricer
+  # false = capteur monochrome, pas de dématriçage
+  color: true
+
+  # Motif de la matrice de Bayer. Laisse "auto" : Siril le lit dans l'en-tête
+  # FITS de tes images. Ne force une valeur (RGGB, BGGR, GRBG, GBRG) que si tes
+  # couleurs sortent inversées.
+  bayer_pattern: "auto"
+
+  # Égalisation de la matrice de Bayer pendant la calibration.
+  # Corrige les micro-écarts de sensibilité entre les canaux du flat.
+  # À laisser à true pour la quasi-totalité des capteurs couleur.
+  equalize_cfa: true
+
+# --- Optique (informatif pour l'instant, utilisé plus tard pour la déconvolution)
+optics:
+  focal_length_mm: 1000
+  aperture_mm: 200
+  pixel_size_um: 3.76
+
+# --- Noms des dossiers de la session ----------------------------------------
+# Modifie-les si tu as déjà une autre convention de nommage.
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+# --- Calibration -------------------------------------------------------------
+calibration:
+  # Utiliser des offsets (bias) pour calibrer les flats.
+  # Mets false si tu utilises des "dark flats" à la place.
+  use_biases: true
+
+  # Correction cosmétique : Siril détecte les pixels chauds et froids à partir
+  # du master dark et les remplace par la médiane de leurs voisins.
+  # Recommandé pour les capteurs CMOS non refroidis ou peu refroidis.
+  cosmetic_correction: true

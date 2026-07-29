@@ -1,0 +1,45 @@
+# ============================================================================
+# PROFIL SETUP — William Optics RedCat 51 + ZWO ASI294MC Pro
+#
+# Monture : SkyWatcher EQM-35 Pro
+# Guidage : ASI120MM Mini + lunette ZWO Mini 30mm
+# Acquisition : ASIAIR PRO
+# ============================================================================
+
+name: "RedCat 51 + ASI294MC Pro (L-eXtreme)"
+
+sensor:
+  # ASI294MC Pro = capteur couleur (matrice de Bayer). Il faut dématricer.
+  color: true
+
+  # L'ASIAIR écrit la matrice dans l'en-tête FITS. "auto" laisse Siril la lire.
+  bayer_pattern: "auto"
+
+  equalize_cfa: true
+
+optics:
+  # RedCat 51 : 250 mm de focale, ouverture 51 mm (donc f/4.9)
+  focal_length_mm: 250
+  aperture_mm: 51
+  # Photosites de l'ASI294MC Pro : 4.63 µm
+  pixel_size_um: 4.63
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # Tu shootes darks + flats, mais PAS de bias/offsets séparés.
+  use_biases: false
+
+  # ⚠️ IMPORTANT : ton ASIAIR PRO empile déjà tes darks et tes flats et écrit
+  # directement un MasterDark_... et un MasterFlat_... dans chaque dossier.
+  # On les utilise tels quels, sans chercher à les réempiler.
+  # Si un jour tu récupères les brutes individuelles, repasse ça à false.
+  use_premade_masters: true
+
+  # Correction cosmétique : nettoyage des pixels chauds résiduels
+  # à partir du master dark.
+  cosmetic_correction: true

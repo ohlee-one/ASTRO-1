@@ -1,0 +1,171 @@
+# ============================================================================
+# PROFIL CIBLE — IC 1805 (Nébuleuse du Cœur) au filtre L-eXtreme
+#
+# L'Optolong L-eXtreme est un filtre DUAL-BAND : il ne laisse passer que
+# le Ha (rouge) et l'OIII (bleu-vert). Conséquences sur le traitement :
+#   - le fond de ciel est déjà très sombre (pollution lumineuse bloquée),
+#     donc l'extraction de fond doit rester DOUCE pour ne pas manger le signal.
+#   - le signal utile est concentré sur peu de canaux : on protège les
+#     extensions faibles, donc débruitage modéré.
+# ============================================================================
+
+name: "IC 1805 — L-eXtreme (extraction Ha/OIII)"
+
+processing:
+  # Extraction bande étroite : pas de dématriçage, on sépare Ha et OIII
+  # directement depuis la matrice de Bayer. Deux images en sortie.
+  mode: "haoiii"
+
+  # RedCat 51 (250 mm) + photosites de 4.63 µm = échantillonnage à ~3.8"/pixel.
+  # C'est déjà large. On agrandit donc le Ha plutôt que de réduire l'OIII,
+  # pour ne pas descendre à ~7.6"/pixel et perdre encore en finesse.
+  resample: "ha"
+
+  # Ajuste les niveaux de l'OIII sur ceux du Ha après empilement,
+  # pour que les deux couches se combinent sans dominante de couleur.
+  linear_match: true
+  linear_match_low: 0.0
+  linear_match_high: 0.92
+
+stacking:
+  # 74 poses : largement assez pour un rejet winsorized efficace.
+  rejection: "winsorized"
+
+  # [bas, haut]. On garde le standard [3, 3].
+  # Si tu vois passer des satellites/avions sur tes brutes, tu pourras
+  # descendre sigma_high à 2.5 pour un rejet plus agressif vers le haut.
+  sigma_low: 3.0
+  sigma_high: 3.0
+
+  # addscale : compense les variations de fond entre poses (idéal ciel profond).
+  normalization: "addscale"
+
+registration:
+  # RedCat 51 à 250 mm = champ large, étoiles fines et nombreuses.
+  # 10 étoiles minimum est prudent ; tes poses en auront des centaines.
+  min_stars: 10
+
+post:
+  # ======================================================================
+  # Phase 2 : GraXpert (sur le linéaire, AVANT le stretch)
+  # ======================================================================
+  background_extraction:
+    enabled: true
+    # Fond déjà sombre grâce au L-eXtreme → lissage élevé = correction douce
+    # qui suit seulement les grands gradients (pollution résiduelle, lune),
+    # sans grignoter la nébulosité Ha diffuse.
+    smoothing: 0.5
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    # ⚠️ Le débruitage IA de GraXpert crash sur Apple Silicon (bug onnxruntime/CoreML).
+    # Désactivé pour l'instant. Le débruitage se fera via Siril (wavelet) ou
+    # manuellement en post-traitement.
+    # Pour réactiver : mets enabled: true après mise à jour de GraXpert.
+    strength: 0.5
+    batch_size: 8
+
+  # ======================================================================
+  # Phase 3 : post-traitement non-linéaire (Siril, APRÈS le stretch)
+  # ======================================================================
+
+  # StarNet++ : sépare les étoiles du nébuleux pour les traiter séparément.
+  # ⚠️ DÉSACTIVÉ : le pipeline ne réinjecte pas encore les étoiles après
+  # traitement du starless (Siril CLI n'a pas de commande scriptable pour
+  # la recombinaison). L'activation produit une image SANS ÉTOILES.
+  # Laissé à false tant que la recombinaison n'est pas implémentée.
+  starnet:
+    enabled: false
+    # Upscale 2× pour les étoiles très fines (capteur à petits photosites).
+    # Plus lent mais plus précis. Désactive si tes étoiles sont déjà bien
+    # séparées.
+    upscale: false
+    # stretch_linear : pré-stretch interne StarNet. On laisse false car notre
+    # pipeline fait le stretch avant StarNet.
+    stretch_linear: false
+
+  # Stretch : linéaire → non-linéaire. C'est l'étape qui rend l'image visible.
+  # autostretch calcule automatiquement les paramètres optimaux (shadow, mid)
+  # à partir des statistiques de l'image. C'est le plus robuste pour une
+  # automatisation : pas de réglage manuel à ajuster selon le sujet.
+  stretch:
+    enabled: true
+    method: "autostretch"
+    # linked=true : mêmes paramètres pour tous les canaux (préserve la balance
+    # des blancs et la blancheur des étoiles). En bande étroite Ha/OIII le
+    # signal n'est pas équilibré entre canaux, mais le stretch linked garde
+    # des étoiles propres et un rendu naturel. Mettre à false pour un
+    # étirement indépendant par canal (couleurs plus vives mais étoiles
+    # moins naturelles).
+    linked: true
+    # shadows_clip : seuil de coupure des basses lumières (négatif = plus de
+    # signal conservé). -2.8 est la valeur par défaut de Siril.
+    shadows_clip: -2.8
+    # target_bg : niveau de fond de ciel visé après stretch (0-1).
+    # 0.25 est la valeur par défaut de Siril (fond moyen gris foncé).
+    target_bg: 0.25
+
+  # Recomposition Ha + OIII → couleur.
+  # Ha → rouge, OIII → vert + bleu (cyan).
+  # On utilise le Ha comme luminance pour renforcer les détails.
+  haoiii_composition:
+    enabled: true
+    use_ha_as_luminance: true
+
+  # Couleur : suppression de la dominante verte + boost de saturation.
+  color:
+    enabled: true
+    # SCNR : supprime le vert résiduel qui ressort après stretch.
+    rmgreen: true
+    rmgreen_type: "maximum"  # "average" = doux, "maximum" = agressif (plus de vert supprimé)
+    # Boost de saturation via `satu` de Siril. 0.9 = +90% de saturation.
+    # saturation_threshold=0.5 : seuil bas pour saturer toute la nébuleuse,
+    # y compris les gaz faibles, pas seulement les parties lumineuses.
+    # Le fond de ciel reste protégé car les pixels proches de la médiane
+    # ne sont pratiquement pas modifiés.
+    saturation_boost: 0.9
+    saturation_threshold: 0.5
+    hue_range: 6  # 6 = toutes les couleurs
+
+    # Saturation ciblée sur le magenta-rose (hue_range=5) pour faire tirer
+    # le rouge Ha vers un rose plus flashy. +100% sur cette plage uniquement.
+    target_hue_boost: 1.0
+    target_hue_range: 5  # 5 = magenta → rose
+    target_hue_threshold: 0.5
+
+    # Décalage de teinte rouge → rose/magenta sans plus de saturation.
+    # ⚠️ DÉSACTIVÉ : l'éclaircissement du canal bleu via MTF fonctionne mais
+    # le rendu est subjectif (tirait le rouge vers le rose). Laissé à 0.0
+    # pour un rendu neutre. Monte à 0.3 pour un décalage vers le rose.
+    blue_shift: 0.0
+
+    # Assombrir le fond de ciel sans toucher à la nébuleuse.
+    # MTF avec un point noir relevé (0.04) : les pixels très sombres (fond
+    # sans gaz) sont assombris, le signal de la nébuleuse est préservé.
+    background_clip: 0.04
+
+  # Sharpening : unsharp mask doux pour renforcer les détails fins.
+  # Le L-eXtreme + RedCat 51 donne des images déjà assez nettes, donc on
+  # reste modéré. Monte amount à 0.8 si tu veux plus de piqué, mais attention
+  # au bruit qui remonte avec.
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0      # taille du flou (0.5 à 2.0)
+    amount: 0.5     # force du mélange (0.5 = modéré)
+
+  # Réduction des étoiles : réduit légèrement la taille des étoiles pour
+  # un rendu plus esthétique.
+  # ⚠️ DÉSACTIVÉ : dépend de StarNet (séparation étoiles/starless). Tant que
+  # la recombinaison n'est pas implémentée, on garde les étoiles d'origine.
+  star_reduction:
+    enabled: false
+    amount: 0.5  # 0.5 = réduction modérée, 1.0 = agressif
+
+  # Export final : TIFF 16-bit avec compression LZW = qualité max pour
+  # post-traitement dans Photoshop, GIMP, ou PixInsight.
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true
