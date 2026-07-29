@@ -118,7 +118,9 @@ Le dossier `templates/` contient des profils de départ par type d'objet :
 ## Itérer avec une IA (Cursor, Claude, ChatGPT…)
 
 Le pipeline est conçu pour fonctionner avec un assistant IA qui ajuste les profils
-à votre place. Le workflow recommandé :
+à votre place. Deux approches possibles :
+
+### Approche simple (sans MCP)
 
 1. Ouvrez le projet dans [Cursor](https://cursor.sh) ou votre éditeur avec un agent IA
 2. Lancez le pipeline : `uv run astro run --session ... --setup ... --target ...`
@@ -131,6 +133,64 @@ Le pipeline est conçu pour fonctionner avec un assistant IA qui ajuste les prof
 
 L'IA lit les profils YAML, comprend la structure, et modifie les bons paramètres.
 Aucune connaissance de Siril ou de GraXpert nécessaire.
+
+### Approche MCP (avancée — itération automatisée)
+
+Astro-1 inclut un serveur MCP (Model Context Protocol) qui expose les outils du
+pipeline directement à votre IA. L'IA peut lancer le pipeline, lire les logs,
+et ajuster les profils — le tout sans que vous touchiez au terminal.
+
+**Installation :**
+
+```bash
+uv sync --extra mcp
+```
+
+**Configuration pour Claude Desktop :**
+
+Ajoutez ce bloc à `~/Library/Application Support/Claude/claude_desktop_config.json` :
+
+```json
+{
+  "mcpServers": {
+    "astro-1": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "astro_pipeline.mcp_server"],
+      "cwd": "/chemin/vers/astro-1"
+    }
+  }
+}
+```
+
+**Configuration pour Cursor :**
+
+Créez un fichier `.mcp.json` à la racine du projet :
+
+```json
+{
+  "mcpServers": {
+    "astro-1": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "astro_pipeline.mcp_server"]
+    }
+  }
+}
+```
+
+**Outils exposés :**
+
+| Outil | Rôle |
+|---|---|
+| `list_profiles_tool` | Liste les profils setup et target disponibles |
+| `doctor_tool` | Vérifie que Siril et GraXpert sont installés |
+| `run_pipeline_tool` | Lance le pipeline complet sur une session |
+| `read_log_tool` | Lit le log de la dernière exécution |
+| `get_profile_tool` | Récupère le contenu d'un profil YAML |
+| `adjust_profile_tool` | Modifie un paramètre dans un profil YAML |
+
+Une fois connecté, vous pouvez dire à Claude : *"Lance le pipeline sur ma session
+M42 avec le setup redcat51 et le target nebula-narrowband, puis si l'image est
+trop sombre ajuste le stretch."* — Claude le fait tout seul.
 
 ### Paramètres clés pour le rendu
 

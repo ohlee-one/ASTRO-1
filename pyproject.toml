@@ -28,6 +28,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",      # tests automatisés
 ]
+mcp = [
+    "mcp[cli]>=1.0,<2",  # serveur MCP pour itération IA (Claude Desktop, Cursor…)
+]
 
 [project.scripts]
 astro = "astro_pipeline.cli:app"
