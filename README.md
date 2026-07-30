@@ -1,5 +1,7 @@
 # Astro-1
 
+[English](README.en.md) | [Français](README.md)
+
 Pipeline automatique de traitement d'astrophotos : de vos fichiers FITS bruts
 jusqu'à une image finale étirée, colorisée et prête à partager.
 
