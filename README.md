@@ -1,37 +1,37 @@
 # Astro-1
 
-[English](README.en.md) | [Français](README.md)
+[English](README.md) | [Français](README.fr.md)
 
-Pipeline automatique de traitement d'astrophotos : de vos fichiers FITS bruts
-jusqu'à une image finale étirée, colorisée et prête à partager.
+Automated astrophotography processing pipeline: from raw FITS files to a final
+stretched, color-calibrated image ready to share.
 
-Astro-1 est un **orchestrateur**. Il ne réimplémente aucun algorithme de traitement
-d'image — il pilote des logiciels open source existants via leur ligne de commande,
-en fonction de profils de configuration YAML simples.
+Astro-1 is an **orchestrator**. It does not reimplement any image processing
+algorithm: it drives existing open-source software via their command line,
+based on simple YAML configuration profiles.
 
-| Étape | Moteur utilisé | Rôle |
+| Step | Engine | Role |
 |---|---|---|
-| Calibration, registration, empilement | [Siril](https://siril.org) | Moteur mature, scriptable, GPL |
-| Extraction de fond de ciel | [GraXpert](https://github.com/Steffenhir/GraXpert) | Modèle IA pré-entraîné |
-| Stretch, couleur, sharpening, export | [Siril](https://siril.org) | Commandes CLI scriptées |
+| Calibration, registration, stacking | [Siril](https://siril.org) | Mature, scriptable, GPL |
+| Background extraction | [GraXpert](https://github.com/Steffenhir/GraXpert) | Pre-trained AI model |
+| Stretch, color, sharpening, export | [Siril](https://siril.org) | Scripted CLI commands |
 
 ---
 
 ## Installation
 
-### Prérequis
+### Prerequisites
 
-1. **Siril** — [téléchargement](https://siril.org/download/) ou `brew install --cask siril`
-2. **GraXpert** — [téléchargement](https://github.com/Steffenhir/GraXpert/releases)
-3. **Python 3.11+** et [uv](https://github.com/astral-sh/uv) (`brew install uv`)
+1. **Siril**: [download](https://siril.org/download/) or `brew install --cask siril`
+2. **GraXpert**: [download](https://github.com/Steffenhir/GraXpert/releases)
+3. **Python 3.11+** and [uv](https://github.com/astral-sh/uv) (`brew install uv`)
 
-Vérifiez que tout est en place :
+Check that everything is in place:
 
 ```bash
 uv run astro doctor
 ```
 
-### Mise en route
+### Getting started
 
 ```bash
 git clone https://github.com/ohlee-one/astro-1.git
@@ -39,32 +39,31 @@ cd astro-1
 uv sync
 ```
 
-### Premier lancement de GraXpert (important)
+### First GraXpert launch (important)
 
-Lancez GraXpert **en mode graphique une fois** et appliquez un traitement sur
-n'importe quelle image. C'est la seule façon de télécharger les modèles IA
-(le mode CLI ne sait pas les récupérer). Une fois les modèles en cache, le mode
-CLI fonctionne sans réseau.
-
----
-
-## Organiser une session
-
-Le pipeline attend cette structure de dossiers pour chaque session :
-
-```
-ma-session/
-├── lights/     ← vos poses sur la cible (FITS)
-├── darks/      ← vos darks (ou MasterDark_*.fit si pré-empilés)
-├── flats/      ← vos flats (ou MasterFlat_*.fit si pré-empilés)
-└── biases/     ← vos offsets (optionnel)
-```
-
-Les dossiers `process/`, `output/` et `logs/` sont créés automatiquement.
+Launch GraXpert **in GUI mode once** and apply a treatment to any image. This
+is the only way to download the AI models (CLI mode cannot fetch them). Once
+the models are cached, CLI mode works offline.
 
 ---
 
-## Lancer un traitement
+## Organizing a session
+
+The pipeline expects this folder structure for each session:
+
+```
+my-session/
+├── lights/     ← your target frames (FITS)
+├── darks/      ← your darks (or MasterDark_*.fit if pre-stacked)
+├── flats/      ← your flats (or MasterFlat_*.fit if pre-stacked)
+└── biases/     ← your offsets (optional)
+```
+
+The `process/`, `output/` and `logs/` folders are created automatically.
+
+---
+
+## Running a pipeline
 
 ```bash
 uv run astro run \
@@ -73,114 +72,116 @@ uv run astro run \
   --target nebula-narrowband
 ```
 
-Le pipeline enchaîne automatiquement :
+The pipeline runs automatically:
 
-1. **Siril** — calibration, alignement, empilement → FITS linéaires
-2. **GraXpert** — extraction du fond de ciel (sur le linéaire)
-3. **Siril** — recomposition Ha+OIII en RGB (mode bande étroite uniquement)
-4. **GraXpert** — débruitage IA (optionnel, sur le RGB linéaire)
-5. **Siril** — stretch, couleur, sharpening, export → TIFF final
+1. **Siril**: calibration, alignment, stacking → linear FITS
+2. **GraXpert**: background extraction (on the linear image)
+3. **Siril**: Ha+OIII recomposition into RGB (narrowband mode only)
+4. **GraXpert**: AI denoising (optional, on the linear RGB)
+5. **Siril**: stretch, color, sharpening, export → final TIFF
 
-L'image finale est dans `output/final.tif`.
+The final image is in `output/final.tif`.
 
-### Aperçu sans exécuter
+### Preview without executing
 
 ```bash
 uv run astro run --session ... --setup ... --target ... --dry-run
 ```
 
-Affiche les scripts Siril et commandes GraXpert générés **sans rien lancer**.
+Displays the generated Siril scripts and GraXpert commands **without running
+anything**.
 
 ---
 
-## Profils de configuration
+## Configuration profiles
 
-Astro-1 fonctionne avec deux types de profils YAML :
+Astro-1 works with two types of YAML profiles:
 
-- **Setup** (`profiles/setups/`) — décrit votre matériel. Change rarement.
-  - Télescope, caméra, pattern de Bayer, dossiers de calibration
-- **Target** (`profiles/targets/`) — décrit ce que vous photographiez. Change à chaque sortie.
-  - Mode de traitement, paramètres d'empilement, post-traitement (stretch, couleur, etc.)
+- **Setup** (`profiles/setups/`): describes your equipment. Rarely changes.
+  - Telescope, camera, Bayer pattern, calibration folders
+- **Target** (`profiles/targets/`): describes what you photograph. Changes every session.
+  - Processing mode, stacking parameters, post-processing (stretch, color, etc.)
 
-### Templates prêts à copier
+### Ready-to-copy templates
 
-Le dossier `templates/` contient des profils de départ optimisés par type
-d'objet et de matériel :
+The `templates/` folder contains optimized starting profiles by object type
+and equipment:
 
-**Setups (matériel) :**
-
-| Template | Usage |
-|---|---|
-| `setup-color-dualband.yaml` | Caméra couleur + filtre dual-band (L-eXtreme, L-Ultimate) |
-| `setup-color-lp.yaml` | Caméra couleur + filtre LP/UV-IR (large bande) |
-| `setup-mono-narrowband.yaml` | Caméra mono + filtres bande étroite (Ha, OIII, SII) |
-| `setup-mono-lrgb.yaml` | Caméra mono + filtres LRGB |
-| `setup-dslr.yaml` | DSLR / appareil photo |
-
-**Targets (cibles) :**
+**Setups (equipment):**
 
 | Template | Usage |
 |---|---|
-| `nebula-narrowband.yaml` | Nébuleuse en bande étroite (Ha/OIII) |
-| `nebula-rgb.yaml` | Nébuleuse en RGB large bande |
-| `galaxy-rgb.yaml` | Galaxie |
-| `cluster-rgb.yaml` | Amas d'étoiles (ouvert ou globulaire) |
-| `comet-rgb.yaml` | Comète |
-| `snr-narrowband.yaml` | Reste de supernova (Veil, Cygnus Loop…) |
+| `setup-color-dualband.yaml` | Color camera + dual-band filter (L-eXtreme, L-Ultimate) |
+| `setup-color-lp.yaml` | Color camera + LP/UV-IR filter (broadband) |
+| `setup-mono-narrowband.yaml` | Mono camera + narrowband filters (Ha, OIII, SII) |
+| `setup-mono-lrgb.yaml` | Mono camera + LRGB filters |
+| `setup-dslr.yaml` | DSLR / camera |
 
-### Assistant interactif (wizard)
+**Targets:**
 
-Pour démarrer encore plus vite, utilisez l'assistant interactif :
+| Template | Usage |
+|---|---|
+| `nebula-narrowband.yaml` | Narrowband nebula (Ha/OIII) |
+| `nebula-rgb.yaml` | Broadband RGB nebula |
+| `galaxy-rgb.yaml` | Galaxy |
+| `cluster-rgb.yaml` | Star cluster (open or globular) |
+| `comet-rgb.yaml` | Comet |
+| `snr-narrowband.yaml` | Supernova remnant (Veil, Cygnus Loop…) |
+
+### Interactive wizard
+
+To get started even faster, use the interactive wizard:
 
 ```bash
 uv run astro wizard
 ```
 
-Le wizard vous guide étape par étape, **sans aucune connaissance technique requise** :
+The wizard guides you step by step, **with no technical knowledge required**:
 
-1. **Caméra** — choisissez votre modèle dans une liste (ASI294MC, ASI533MC, Canon 600D…) ou entrez un nom. La taille des photosites est automatiquement déduite.
-2. **Filtre** — sélectionnez votre filtre (L-eXtreme, L-Pro, Ha 7nm…). Le type de traitement est déduit automatiquement.
-3. **Fichiers pré-empilés** — indiquez si vos darks/flats sont déjà empilés par votre logiciel d'acquisition (ASIAIR, NINA) et si vous shootez des bias séparés.
-4. **Cible** — choisissez le type d'objet (nébuleuse, galaxie, amas, comète…) et donnez-lui un nom (M42, IC1805…).
+1. **Camera**: pick your model from a list (ASI294MC, ASI533MC, Canon 600D…) or enter a name. Pixel size is automatically inferred.
+2. **Filter**: select your filter (L-eXtreme, L-Pro, Ha 7nm…). The processing type is automatically derived.
+3. **Pre-stacked files**: indicate whether your darks/flats are already stacked by your acquisition software (ASIAIR, NINA) and whether you shoot separate bias frames.
+4. **Target**: choose the object type (nebula, galaxy, cluster, comet…) and give it a name (M42, IC1805…).
 
-Les profils YAML sont générés automatiquement dans `profiles/`. Plus besoin de copier et éditer les templates à la main.
+YAML profiles are generated automatically in `profiles/`. No need to copy and
+edit templates by hand.
 
 ---
 
-## Itérer avec une IA (Cursor, Claude, ChatGPT…)
+## Iterating with an AI (Cursor, Claude, ChatGPT…)
 
-Le pipeline est conçu pour fonctionner avec un assistant IA qui ajuste les profils
-à votre place. Deux approches possibles :
+The pipeline is designed to work with an AI assistant that adjusts profiles
+for you. Two approaches:
 
-### Approche simple (sans MCP)
+### Simple approach (no MCP)
 
-1. Ouvrez le projet dans [Cursor](https://cursor.sh) ou votre éditeur avec un agent IA
-2. Lancez le pipeline : `uv run astro run --session ... --setup ... --target ...`
-3. Si le rendu ne vous plaît pas, décrivez ce que vous voulez à l'IA :
-   - *"L'image est trop sombre"* → l'IA ajuste `stretch.shadows_clip` ou `stretch.target_bg`
-   - *"Les couleurs de la nébuleuse ne sont pas assez vives"* → l'IA ajuste `color.saturation_boost`
-   - *"Le fond de ciel est trop clair"* → l'IA ajuste `color.background_clip`
-   - *"Il y a trop de vert résiduel"* → l'IA change `color.rmgreen_type` de `"average"` à `"maximum"`
-4. Relancez le pipeline — itérez jusqu'au résultat souhaité
+1. Open the project in [Cursor](https://cursor.sh) or your editor with an AI agent
+2. Run the pipeline: `uv run astro run --session ... --setup ... --target ...`
+3. If the result doesn't look right, describe what you want to the AI:
+   - *"The image is too dark"* → the AI adjusts `stretch.shadows_clip` or `stretch.target_bg`
+   - *"The nebula colors aren't vivid enough"* → the AI adjusts `color.saturation_boost`
+   - *"The sky background is too bright"* → the AI adjusts `color.background_clip`
+   - *"There's too much residual green"* → the AI changes `color.rmgreen_type` from `"average"` to `"maximum"`
+4. Re-run the pipeline, iterate until you get the desired result
 
-L'IA lit les profils YAML, comprend la structure, et modifie les bons paramètres.
-Aucune connaissance de Siril ou de GraXpert nécessaire.
+The AI reads the YAML profiles, understands the structure, and modifies the
+right parameters. No knowledge of Siril or GraXpert needed.
 
-### Approche MCP (avancée — itération automatisée)
+### MCP approach (advanced: automated iteration)
 
-Astro-1 inclut un serveur MCP (Model Context Protocol) qui expose les outils du
-pipeline directement à votre IA. L'IA peut lancer le pipeline, lire les logs,
-et ajuster les profils — le tout sans que vous touchiez au terminal.
+Astro-1 includes an MCP (Model Context Protocol) server that exposes the
+pipeline tools directly to your AI. The AI can run the pipeline, read logs,
+and adjust profiles, all without you touching the terminal.
 
-**Installation :**
+**Installation:**
 
 ```bash
 uv sync --extra mcp
 ```
 
-**Configuration pour Claude Desktop :**
+**Claude Desktop configuration:**
 
-Ajoutez ce bloc à `~/Library/Application Support/Claude/claude_desktop_config.json` :
+Add this block to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -188,15 +189,15 @@ Ajoutez ce bloc à `~/Library/Application Support/Claude/claude_desktop_config.j
     "astro-1": {
       "command": "uv",
       "args": ["run", "python", "-m", "astro_pipeline.mcp_server"],
-      "cwd": "/chemin/vers/astro-1"
+      "cwd": "/path/to/astro-1"
     }
   }
 }
 ```
 
-**Configuration pour Cursor :**
+**Cursor configuration:**
 
-Créez un fichier `.mcp.json` à la racine du projet :
+Create a `.mcp.json` file at the project root:
 
 ```json
 {
@@ -209,42 +210,42 @@ Créez un fichier `.mcp.json` à la racine du projet :
 }
 ```
 
-**Outils exposés :**
+**Exposed tools:**
 
-| Outil | Rôle |
+| Tool | Role |
 |---|---|
-| `list_profiles_tool` | Liste les profils setup et target disponibles |
-| `doctor_tool` | Vérifie que Siril et GraXpert sont installés |
-| `run_pipeline_tool` | Lance le pipeline complet sur une session |
-| `read_log_tool` | Lit le log de la dernière exécution |
-| `get_profile_tool` | Récupère le contenu d'un profil YAML |
-| `adjust_profile_tool` | Modifie un paramètre dans un profil YAML |
+| `list_profiles_tool` | Lists available setup and target profiles |
+| `doctor_tool` | Checks that Siril and GraXpert are installed |
+| `run_pipeline_tool` | Runs the full pipeline on a session |
+| `read_log_tool` | Reads the log of the last run |
+| `get_profile_tool` | Retrieves the content of a YAML profile |
+| `adjust_profile_tool` | Modifies a parameter in a YAML profile |
 
-Une fois connecté, vous pouvez dire à Claude : *"Lance le pipeline sur ma session
-M42 avec le setup redcat51 et le target nebula-narrowband, puis si l'image est
-trop sombre ajuste le stretch."* — Claude le fait tout seul.
+Once connected, you can tell Claude: *"Run the pipeline on my M42 session with
+the redcat51 setup and the nebula-narrowband target, then if the image is too
+dark, adjust the stretch."* Claude does it all by itself.
 
-### Paramètres clés pour le rendu
+### Key rendering parameters
 
-| Paramètre | Fichier | Effet |
+| Parameter | File | Effect |
 |---|---|---|
-| `stretch.target_bg` | target | Luminosité du fond (0.15 = sombre, 0.35 = clair) |
-| `stretch.shadows_clip` | target | Conservation des ombres (-2.8 = standard, -1.0 = plus de contraste) |
-| `color.saturation_boost` | target | Saturation globale (0.5 = +50%, 1.0 = +100%) |
-| `color.saturation_threshold` | target | Seuil de bruit (0 = tout saturer, 1.5 = seulement les zones lumineuses) |
-| `color.target_hue_boost` | target | Saturation ciblée sur une teinte (5 = magenta-rose) |
-| `color.background_clip` | target | Assombrir le fond (0.02 = subtil, 0.06 = prononcé) |
-| `color.rmgreen_type` | target | Suppression du vert ("average" = doux, "maximum" = agressif) |
-| `sharpening.amount` | target | Force du sharpening (0.5 = modéré, 1.0 = fort) |
+| `stretch.target_bg` | target | Background brightness (0.15 = dark, 0.35 = bright) |
+| `stretch.shadows_clip` | target | Shadow retention (-2.8 = standard, -1.0 = more contrast) |
+| `color.saturation_boost` | target | Global saturation (0.5 = +50%, 1.0 = +100%) |
+| `color.saturation_threshold` | target | Noise threshold (0 = saturate everything, 1.5 = only bright areas) |
+| `color.target_hue_boost` | target | Targeted hue saturation (5 = magenta-pink) |
+| `color.background_clip` | target | Darken background (0.02 = subtle, 0.06 = pronounced) |
+| `color.rmgreen_type` | target | Green removal ("average" = gentle, "maximum" = aggressive) |
+| `sharpening.amount` | target | Sharpening strength (0.5 = moderate, 1.0 = strong) |
 
 ---
 
-## Commandes disponibles
+## Available commands
 
 ```bash
-uv run astro doctor          # Vérifie que Siril et GraXpert sont installés
-uv run astro run ...          # Lance le pipeline complet
-uv run astro run ... --dry-run  # Affiche les scripts sans exécuter
+uv run astro doctor          # Checks that Siril and GraXpert are installed
+uv run astro run ...          # Runs the full pipeline
+uv run astro run ... --dry-run  # Displays scripts without executing
 ```
 
 ---
@@ -253,33 +254,33 @@ uv run astro run ... --dry-run  # Affiche les scripts sans exécuter
 
 ```
 src/astro_pipeline/
-├── cli.py          → point d'entrée (Typer CLI)
-├── pipeline.py     → enchaîne les phases, gère les chemins et le logging
-├── config.py       → modèles Pydantic + chargement/fusion des profils YAML
-├── log.py          → logger persistant par session (fichier + console Rich)
+├── cli.py          → entry point (Typer CLI)
+├── pipeline.py     → orchestrates phases, handles paths and logging
+├── config.py       → Pydantic models + YAML profile loading/merging
+├── log.py          → persistent per-session logger (file + Rich console)
 └── engines/
-    ├── siril.py    → génère les scripts .ssf et lance siril-cli
-    └── graxpert.py → construit et lance les commandes GraXpert
+    ├── siril.py    → generates .ssf scripts and runs siril-cli
+    └── graxpert.py → builds and runs GraXpert commands
 ```
 
-Règle de dépendance : `cli` → `pipeline` → `engines` → `config`. Jamais dans l'autre sens.
+Dependency rule: `cli` → `pipeline` → `engines` → `config`. Never the other way.
 
 ---
 
-## Limitations connues
+## Known limitations
 
-- **Débruitage GraXpert sur Apple Silicon** : peut crasher avec un bug `onnxruntime`/`CoreML`
-  (`KernelChannels != InputChannels`). Désactivé par défaut dans les templates.
-- **StarNet++** : la séparation étoiles/starless fonctionne, mais la recombinaison
-  (starless traité + starmask) n'est pas encore implémentée. Désactivé par défaut.
-- **macOS uniquement** pour l'instant. Le pipeline devrait fonctionner sur Linux
-  avec des chemins d'installation adaptés, mais c'est non testé.
+- **GraXpert denoising on Apple Silicon**: may crash with an `onnxruntime`/`CoreML`
+  bug (`KernelChannels != InputChannels`). Disabled by default in templates.
+- **StarNet++**: star/starless separation works, but recombination
+  (processed starless + star mask) is not yet implemented. Disabled by default.
+- **macOS only** for now. The pipeline should work on Linux with adapted
+  install paths, but this is untested.
 
 ---
 
-## Licence
+## License
 
-MIT — voir [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
 
-Astro-1 utilise et pilote des logiciels open source (Siril : GPL, GraXpert : MIT)
-qui conservent leurs propres licences.
+Astro-1 uses and drives open-source software (Siril: GPL, GraXpert: MIT) which
+retain their own licenses.
