@@ -4,8 +4,14 @@
 # Pour les filtres dual-band (L-eXtreme, L-Ultimate, etc.) ou caméras
 # monochromes avec filtres étroits séparés.
 #
+# Ce template utilise le traitement par couches (multi-layer) :
+#   1. Stretch + débruitage sur l'image complète
+#   2. StarNet : séparation étoiles / starless
+#   3. GraXpert : extraction du fond sur le starless
+#   4. Traitement indépendant des gaz (rmgreen, sharpening) et des étoiles
+#   5. Recombinaison Python (fond lissé + gaz + étoiles)
+#
 # Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
-# Modifie au moins : name, resample, linear_match_high si besoin.
 # ============================================================================
 
 name: "Nébuleuse bande étroite (template)"
@@ -31,39 +37,77 @@ registration:
   min_stars: 10
 
 post:
+  # ======================================================================
+  # Extraction de fond : seqsubsky (par pose) + GraXpert (post-empilement)
+  # ======================================================================
   background_extraction:
     enabled: true
+    # Étape 1 : seqsubsky sur chaque pose calibrée (gradient par pose)
+    use_siril_subsky: true
+    subsky_method: "poly"
+    subsky_degree: 1
+    subsky_samples: 30
+    subsky_tolerance: 1.0
+    subsky_smooth: 0.5
+    # Étape 2 : GraXpert (modèle IA) sur l'image empilée pour le gradient résiduel
+    use_graxpert_post_stack: true
     smoothing: 0.5
     correction: "subtraction"
+    # Étape 3 : subsky sur le starless étiré (phase 2 du traitement par couches)
+    post_subsky_method: "rbf"
+    post_subsky_degree: 2
+    post_subsky_samples: 80
+    post_subsky_tolerance: 0.5
+    post_subsky_smooth: 0.8
 
   denoise:
-    # ⚠️ Le débruitage IA de GraXpert peut crasher sur Apple Silicon (bug onnxruntime).
-    # Désactivé par défaut. Active si ton GraXpert fonctionne en CLI.
+    # GraXpert denoise désactivé (modèle IA à télécharger séparément).
+    # On utilise le denoise natif Siril (NL-Bayes + DA3D) après le stretch.
     enabled: false
     strength: 0.5
     batch_size: 8
+    # Débruitage NL-Bayes natif Siril, appliqué APRÈS le stretch.
+    # mod=0.4 : 40% signal original, 60% débruité.
+    siril_denoise: true
+    siril_mod: 0.4
 
+  # ======================================================================
+  # StarNet : séparation en couches (étoiles / starless)
+  # ======================================================================
+  # Active la séparation StarNet2 pour traiter indépendamment :
+  #   - Le starless (gaz + fond) -> GraXpert extrait le fond
+  #   - Les étoiles -> traitement séparé (rondeur, couleur)
   starnet:
-    # ⚠️ Désactivé : la recombinaison starless+starmask n'est pas encore
-    # implémentée. L'activation produit une image sans étoiles.
-    enabled: false
+    enabled: true
     upscale: false
     stretch_linear: false
 
+  # ======================================================================
+  # Stretch : GHS (Generalized Hyperbolic Stretch)
+  # ======================================================================
+  # GHS avec D=3.0, shadows_clip=-1.5 : stable et produit un fond propre.
   stretch:
     enabled: true
-    method: "autostretch"
+    method: "ght"
     linked: true
-    shadows_clip: -2.8
-    target_bg: 0.25
+    shadows_clip: -1.5
+    ghs_d: 3.0
+    ghs_sp: 0.15
+    ghs_hp: 0.75
+    ghs_lp: 0.02
+    ghs_b: 13.0
 
   haoiii_composition:
     enabled: true
     use_ha_as_luminance: true
 
+  # ======================================================================
+  # Couleur : suppression du vert + équilibrage
+  # ======================================================================
   color:
     enabled: true
     rmgreen: true
+    # "maximum" pour les nébuleuses (plus de vert résiduel en bande étroite).
     rmgreen_type: "maximum"
     saturation_boost: 0.9
     saturation_threshold: 0.5
@@ -74,6 +118,9 @@ post:
     blue_shift: 0.0
     background_clip: 0.04
 
+  # ======================================================================
+  # Sharpening : sur la couche gaz uniquement
+  # ======================================================================
   sharpening:
     enabled: true
     method: "unsharp"

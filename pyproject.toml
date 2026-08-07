@@ -22,6 +22,9 @@ dependencies = [
     "pydantic>=2.7",    # validation des profils YAML
     "pyyaml>=6.0",      # lecture des profils
     "rich>=13.7",       # affichage lisible dans le terminal
+    "numpy>=1.26",      # recombinaison StarNet (max pixel par pixel)
+    "astropy>=5.0",     # lecture/écriture FITS pour recombinaison StarNet
+    "scipy>=1.12",      # filtre médian pour débruitage du fond (4 couches)
 ]
 
 [project.optional-dependencies]
@@ -30,6 +33,10 @@ dev = [
 ]
 mcp = [
     "mcp[cli]>=1.0,<2",  # serveur MCP pour itération IA (Claude Desktop, Cursor…)
+]
+starnet = [
+    # StarNet2 doit être installé séparément (https://starnetastro.com)
+    # Ce groupe n'installe que les deps Python pour la recombinaison.
 ]
 
 [project.scripts]

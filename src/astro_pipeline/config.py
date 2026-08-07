@@ -120,11 +120,44 @@ class BackgroundExtraction(BaseModel):
     smoothing: float = Field(default=0.1, ge=0.0, le=1.0)
     correction: Literal["subtraction", "division"] = "subtraction"
 
+    # Utiliser l'extraction de gradient native de Siril (seqsubsky) au lieu
+    # de GraXpert. Plus efficace pour les gradients complexes en ciel pollué.
+    # Applique le retrait de gradient sur chaque pose calibrée AVANT empilement.
+    # GraXpert est alors désactivé (le retrait post-empilement n'est plus nécessaire).
+    use_siril_subsky: bool = False
+    subsky_method: Literal["rbf", "poly"] = "poly"
+    subsky_degree: int = Field(default=1, ge=0, le=4)
+    subsky_samples: int = Field(default=20, ge=5, le=100)
+    subsky_tolerance: float = Field(default=1.0, ge=0.0, le=10.0)
+    subsky_smooth: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    # Subsky post-empilement (sur l'image empilée, avant stretch).
+    # Paramètres séparés car le gradient résiduel après empilement peut
+    # nécessiter une méthode différente (RBF vs poly).
+    post_subsky_method: Literal["rbf", "poly"] = "rbf"
+    post_subsky_degree: int = Field(default=2, ge=0, le=4)
+    post_subsky_samples: int = Field(default=30, ge=5, le=100)
+    post_subsky_tolerance: float = Field(default=1.0, ge=0.0, le=10.0)
+    post_subsky_smooth: float = Field(default=0.3, ge=0.0, le=1.0)
+
+    # Utiliser GraXpert (modèle IA) pour l'extraction de fond post-empilement
+    # au lieu du subsky Siril. Le modèle IA distingue mieux la galaxie du
+    # gradient, ce qui est crucial pour les gradients complexes en ciel pollué.
+    # Nécessite que le modèle bge de GraXpert soit téléchargé (lancer le GUI
+    # une fois). Le seqsubsky sur les poses individuelles reste actif.
+    use_graxpert_post_stack: bool = False
+
 
 class Denoise(BaseModel):
     enabled: bool = True
     strength: float = Field(default=0.5, ge=0.0, le=1.0)
     batch_size: int = Field(default=4, ge=1, le=32)
+
+    # Débruitage natif Siril (algorithme NL-Bayes, non-local Bayesian).
+    # Ne nécessite pas de modèle IA. Appliqué après le stretch.
+    # -mod : modulation (0 = tout débruité, 1 = inchangé). 0.7 = doux.
+    siril_denoise: bool = False
+    siril_mod: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class StarNet(BaseModel):
@@ -170,14 +203,19 @@ class StarReduction(BaseModel):
 class Stretch(BaseModel):
     """Passage du linéaire au non-linéaire (l'image devient visible).
 
-    Deux méthodes disponibles :
-      - "autostretch" : détection automatique des paramètres (recommandé).
+    Trois méthodes disponibles :
+      - "autostretch" : détection automatique des paramètres (simple).
       - "asinh"       : stretch arcsinh manuel, plus doux pour les faibles
                         nébulosités. Préserve mieux la luminosité L*a*b*.
+      - "ght"         : Generalized Hyperbolic Stretch (GHS). Permet de
+                        contrôler précisément où le stretch agit (symmetry
+                        point), de protéger les étoiles (HP) et les ombres
+                        (LP). C'est l'outil préféré de la communauté astro
+                        pour les images difficiles (ciel pollué, galaxies).
     """
 
     enabled: bool = True
-    method: Literal["autostretch", "asinh"] = "autostretch"
+    method: Literal["autostretch", "asinh", "ght"] = "autostretch"
 
     # --- Paramètres autostretch ---
     # Point de coupe des ombres, en écarts-types du pic principal.
@@ -196,6 +234,22 @@ class Stretch(BaseModel):
     offset: float = Field(default=0.0, ge=0.0, le=1.0)
     # Utilise les poids de luminance de l'œil humain (préserve la clarté).
     human: bool = True
+
+    # --- Paramètres GHS (ght) ---
+    # Force du stretch, entre 0 et 10. Plus élevé = stretch plus agressif.
+    ghs_d: float = Field(default=3.0, ge=0.0, le=10.0)
+    # Symmetry point (SP), entre 0 et 1. Point où le stretch est le plus intense.
+    # Pour les galaxies : 0.2-0.3 (mid-tones). Pour les nébuleuses : 0.1-0.2.
+    ghs_sp: float = Field(default=0.2, ge=0.0, le=1.0)
+    # Highlight protection (HP), entre 0 et 1. Protège les étoiles du bloat.
+    # 0.7 = protection modérée, 0.85 = protection forte.
+    ghs_hp: float = Field(default=0.75, ge=0.0, le=1.0)
+    # Local protection (LP), entre 0 et SP. Zone linéaire préservant les ombres.
+    # Évite de remonter le bruit du background.
+    ghs_lp: float = Field(default=0.0, ge=0.0, le=1.0)
+    # B (focal), entre -5 et 15. Contrôle la largeur du stretch autour de SP.
+    # 13 = très focalisé (défaut Siril). Valeurs plus basses = stretch plus large.
+    ghs_b: float = Field(default=13.0, ge=-5.0, le=15.0)
 
 
 class HaOIIIComposition(BaseModel):
@@ -256,6 +310,13 @@ class Color(BaseModel):
     """
 
     enabled: bool = True
+
+    # Calibration photométrique de couleur (PCC) : compare les couleurs des
+    # étoiles avec un catalogue pour calibrer automatiquement la balance des
+    # blancs. Essentiel en ciel pollué où les canaux ont des niveaux différents.
+    # Nécessite un plate-solve (fait automatiquement par Siril avec focal/pixel).
+    # Désactivé par défaut (nécessite une connexion internet pour les catalogues).
+    photometric_cc: bool = False
 
     # Suppression de la dominante verte. Très utile en ciel profond,
     # surtout après stretch où le vert résiduel ressort.
@@ -347,6 +408,14 @@ class Post(BaseModel):
 
 class TargetProfile(BaseModel):
     name: str
+
+    # Coordonnées approximatives de la cible (J2000) pour le plate-solving.
+    # Format: "HH:MM:SS" pour RA, "DD:MM:SS" pour Dec.
+    # Utilisé par la calibration photométrique (PCC) de Siril.
+    # Si vide, la PCC nécessitera que l'image soit déjà plate-solved.
+    ra: str = ""
+    dec: str = ""
+
     processing: Processing = Field(default_factory=Processing)
     stacking: Stacking = Field(default_factory=Stacking)
     registration: Registration = Field(default_factory=Registration)

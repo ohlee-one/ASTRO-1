@@ -18,6 +18,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
+
 from astro_pipeline.config import Profile
 
 # Emplacements où chercher siril-cli, dans l'ordre.
@@ -101,6 +103,17 @@ def find_premade_master(session_dir: Path, folder: str) -> Path:
     return candidates[0]
 
 
+def _dir_has_files(session_dir: Path, folder: str) -> bool:
+    """Vérifie si un dossier de calibration contient des fichiers FITS."""
+    directory = session_dir / folder
+    if not directory.is_dir():
+        return False
+    return bool(
+        list(directory.glob("*.fit")) + list(directory.glob("*.fits"))
+        + list(directory.glob("*.FIT")) + list(directory.glob("*.FITS"))
+    )
+
+
 def _rejection_arguments(profile: Profile) -> str:
     """Traduit les réglages de rejet du YAML en arguments Siril."""
     stacking = profile.target.stacking
@@ -151,15 +164,26 @@ def build_script(session_dir: Path, profile: Profile) -> str:
         flat_master = find_premade_master(session_dir, folders.flats)
         dark_reference = f"../{folders.darks}/{dark_master.name}"
         flat_reference = f"../{folders.flats}/{flat_master.name}"
+        bias_reference = None
         lines += [
             "# Masters déjà empilés en amont — aucun traitement nécessaire",
             f"#   dark : {dark_master.name}",
             f"#   flat : {flat_master.name}",
-            "",
         ]
-    else:
-        # --- Master bias -----------------------------------------------------
         if calib.use_biases:
+            bias_master = find_premade_master(session_dir, folders.biases)
+            bias_reference = f"../{folders.biases}/{bias_master.name}"
+            lines.append(f"#   bias : {bias_master.name}")
+        lines.append("")
+        has_dark = True
+        has_flat = True
+    else:
+        has_dark = _dir_has_files(session_dir, folders.darks)
+        has_flat = _dir_has_files(session_dir, folders.flats)
+
+        # --- Master bias -----------------------------------------------------
+        bias_reference = None
+        if calib.use_biases and has_flat:
             lines += [
                 "# Master offset (bias)",
                 f"cd {folders.biases}",
@@ -169,39 +193,44 @@ def build_script(session_dir: Path, profile: Profile) -> str:
                 "cd ..",
                 "",
             ]
+            bias_reference = "bias_stacked"
 
+        flat_reference = None
         # --- Master flat -----------------------------------------------------
-        lines += [
-            "# Master flat",
-            f"cd {folders.flats}",
-            "convert flat -out=../process",
-            "cd ../process",
-        ]
-        if calib.use_biases:
-            # On soustrait l'offset des flats avant de les empiler
-            lines.append("calibrate flat -bias=bias_stacked")
-            flat_sequence = "pp_flat"
-        else:
-            flat_sequence = "flat"
-        lines += [
-            # Les flats se normalisent en multiplicatif, pas en additif
-            f"stack {flat_sequence} rej w 3 3 -norm=mul",
-            "cd ..",
-            "",
-        ]
+        if has_flat:
+            lines += [
+                "# Master flat",
+                f"cd {folders.flats}",
+                "convert flat -out=../process",
+                "cd ../process",
+            ]
+            if calib.use_biases:
+                # On soustrait l'offset des flats avant de les empiler
+                lines.append("calibrate flat -bias=bias_stacked")
+                flat_sequence = "pp_flat"
+            else:
+                flat_sequence = "flat"
+            lines += [
+                # Les flats se normalisent en multiplicatif, pas en additif
+                f"stack {flat_sequence} rej w 3 3 -norm=mul",
+                "cd ..",
+                "",
+            ]
+            flat_reference = f"{flat_sequence}_stacked"
 
         # --- Master dark -----------------------------------------------------
-        lines += [
-            "# Master dark",
-            f"cd {folders.darks}",
-            "convert dark -out=../process",
-            "cd ../process",
-            "stack dark rej w 3 3 -nonorm",
-            "cd ..",
-            "",
-        ]
-        dark_reference = "dark_stacked"
-        flat_reference = f"{flat_sequence}_stacked"
+        dark_reference = None
+        if has_dark:
+            lines += [
+                "# Master dark",
+                f"cd {folders.darks}",
+                "convert dark -out=../process",
+                "cd ../process",
+                "stack dark rej w 3 3 -nonorm",
+                "cd ..",
+                "",
+            ]
+            dark_reference = "dark_stacked"
 
     # --- Calibration des lights ---------------------------------------------
     processing = profile.target.processing
@@ -212,11 +241,14 @@ def build_script(session_dir: Path, profile: Profile) -> str:
     # commande register. Ce réglage est conservé dans le profil pour
     # documentation et usage futur (validation post-registration).
 
-    calibrate_options = [
-        f"-dark={dark_reference}",
-        f"-flat={flat_reference}",
-    ]
-    if calib.cosmetic_correction:
+    calibrate_options = []
+    if dark_reference:
+        calibrate_options.append(f"-dark={dark_reference}")
+    if flat_reference:
+        calibrate_options.append(f"-flat={flat_reference}")
+    if bias_reference:
+        calibrate_options.append(f"-bias={bias_reference}")
+    if calib.cosmetic_correction and dark_reference:
         # Détection des pixels chauds/froids à partir du master dark
         calibrate_options.append("-cc=dark")
     if sensor.color:
@@ -235,29 +267,63 @@ def build_script(session_dir: Path, profile: Profile) -> str:
         f"cd {folders.lights}",
         "convert light -out=../process",
         "cd ../process",
-        f"calibrate light {' '.join(calibrate_options)}",
-        "",
     ]
+    if calibrate_options:
+        # Siril nomme la séquence light_ (avec underscore final)
+        lines.append(f"calibrate light_ {' '.join(calibrate_options)}")
+    else:
+        lines.append("# Pas de darks/flats — calibration skipée (preview)")
+    lines.append("")
+
+    bg_settings = profile.target.post.background_extraction
+    # Après calibration, la séquence devient pp_light_ (avec underscore)
+    # Sans calibration, c'est light_ directement
+    light_prefix = "pp_light_" if calibrate_options else "light_"
+
+    # Extraction de gradient native Siril (seqsubsky) sur les poses calibrées.
+    # Plus efficace que GraXpert pour les gradients complexes en ciel pollué.
+    use_subsky = bg_settings.enabled and bg_settings.use_siril_subsky
+    if use_subsky:
+        if bg_settings.subsky_method == "rbf":
+            subsky_cmd = (
+                f"seqsubsky {light_prefix} -rbf -samples={bg_settings.subsky_samples} "
+                f"-tolerance={bg_settings.subsky_tolerance} -smooth={bg_settings.subsky_smooth}"
+            )
+        else:
+            subsky_cmd = (
+                f"seqsubsky {light_prefix} {bg_settings.subsky_degree} "
+                f"-samples={bg_settings.subsky_samples} "
+                f"-tolerance={bg_settings.subsky_tolerance} -smooth={bg_settings.subsky_smooth}"
+            )
+        lines += [
+            f"# Extraction de gradient (seqsubsky Siril {bg_settings.subsky_method} — sur chaque pose calibrée)",
+            subsky_cmd,
+            "",
+        ]
+        # Après seqsubsky, la séquence devient bkg_<light_prefix>
+        light_prefix = f"bkg_{light_prefix}"
 
     rejection = _rejection_arguments(profile)
     normalization = profile.target.stacking.normalization
 
     if extract_mode:
-        lines += _haoiii_lines(profile, rejection, normalization)
+        lines += _haoiii_lines(profile, rejection, normalization, light_prefix)
     else:
-        lines += _rgb_lines(rejection, normalization)
+        lines += _rgb_lines(rejection, normalization, light_prefix)
 
     return "\n".join(lines) + "\n"
 
 
-def _rgb_lines(rejection: str, normalization: str) -> list[str]:
+def _rgb_lines(
+    rejection: str, normalization: str, light_prefix: str = "pp_light"
+) -> list[str]:
     """Chaîne classique : une seule image couleur en sortie."""
     return [
         "# Alignement sur les étoiles",
-        "register pp_light",
+        f"register {light_prefix}",
         "",
         "# Empilement final",
-        f"stack r_pp_light {rejection} "
+        f"stack r_{light_prefix} {rejection} "
         f"-norm={normalization} -output_norm -out=../output/result",
         "",
         "# Rechargement du résultat pour vérification",
@@ -268,7 +334,10 @@ def _rgb_lines(rejection: str, normalization: str) -> list[str]:
 
 
 def _haoiii_lines(
-    profile: Profile, rejection: str, normalization: str
+    profile: Profile,
+    rejection: str,
+    normalization: str,
+    light_prefix: str = "pp_light",
 ) -> list[str]:
     """Chaîne bande étroite : deux images monochromes Ha et OIII en sortie."""
     processing = profile.target.processing
@@ -280,16 +349,16 @@ def _haoiii_lines(
 
     lines = [
         "# Extraction des couches Ha et OIII depuis la matrice de Bayer",
-        f"seqextract_HaOIII pp_light{resample}",
+        f"seqextract_HaOIII {light_prefix}{resample}",
         "",
         "# --- Couche Ha ---",
-        "register Ha_pp_light",
-        f"stack r_Ha_pp_light {rejection} "
+        f"register Ha_{light_prefix}",
+        f"stack r_Ha_{light_prefix} {rejection} "
         f"-norm={normalization} -output_norm -out=../output/Ha_result",
         "",
         "# --- Couche OIII ---",
-        "register OIII_pp_light",
-        f"stack r_OIII_pp_light {rejection} "
+        f"register OIII_{light_prefix}",
+        f"stack r_OIII_{light_prefix} {rejection} "
         f"-norm={normalization} -output_norm -out=../output/OIII_result",
         "",
     ]
@@ -329,6 +398,20 @@ def _stretch_lines(profile: Profile) -> list[str]:
         return [
             "# Stretch automatique (linéaire → non-linéaire)",
             f"autostretch {linked_flag} {stretch.shadows_clip} {stretch.target_bg}",
+        ]
+
+    if stretch.method == "ght":
+        # GHS : on utilise autoghs qui calcule SP automatiquement (plus fiable
+        # que ght qui stretch depuis 0 et écrase le background).
+        # autoghs: shadowsclip = k (SP = k.sigma de la médiane), D = force.
+        linked_flag = "-linked" if stretch.linked else ""
+        cmd = (
+            f"autoghs {linked_flag} {stretch.shadows_clip} {stretch.ghs_d} "
+            f"-b={stretch.ghs_b} -hp={stretch.ghs_hp} -lp={stretch.ghs_lp}"
+        )
+        return [
+            "# Stretch GHS (Generalized Hyperbolic Stretch)",
+            cmd,
         ]
 
     # asinh : stretch arcsinh manuel, plus doux pour les faibles nébulosités.
@@ -527,23 +610,112 @@ def _single_post_lines(
     On travaille dans output/ (le cd est fait en haut du script).
     Les fichiers d'entrée s'y trouvent déjà (produits par Siril phase 1 ou
     GraXpert phase 2).
+
+    Si StarNet est activé, on utilise un traitement en 3 couches:
+    1. Stretch + StarNet -> starless (galaxie+fond) + starmask (étoiles)
+    2. Traitement du starless: denoise agressif, couleur, sharpening
+    3. Recombinaison: starless + starmask -> image finale
     """
+    starnet = profile.target.post.starnet
+
+    if not starnet.enabled:
+        # --- Mode classique (sans séparation de couches) ---
+        lines: list[str] = [
+            f"# --- Post-traitement : {img.name} ---",
+            f"load {img.stem}",
+        ]
+
+        # Subsky post-empilement (si GraXpert pas activé)
+        bg = profile.target.post.background_extraction
+        if bg.enabled and bg.use_siril_subsky and not bg.use_graxpert_post_stack:
+            method = bg.post_subsky_method
+            lines.append(f"# Extraction gradient résiduel (subsky {method})")
+            if method == "rbf":
+                lines.append(
+                    f"subsky -rbf -samples={bg.post_subsky_samples} "
+                    f"-tolerance={bg.post_subsky_tolerance} -smooth={bg.post_subsky_smooth}"
+                )
+            else:
+                lines.append(
+                    f"subsky {bg.post_subsky_degree} -samples={bg.post_subsky_samples} "
+                    f"-tolerance={bg.post_subsky_tolerance} -smooth={bg.post_subsky_smooth}"
+                )
+
+        # PCC
+        color = profile.target.post.color
+        if color.enabled and color.photometric_cc:
+            focal = profile.setup.optics.focal_length_mm
+            pixelsize = profile.setup.optics.pixel_size_um
+            ra = profile.target.ra
+            dec = profile.target.dec
+            lines.append("# Plate-solving + calibration photométrique (PCC)")
+            if ra and dec:
+                lines.append(f"platesolve {ra} {dec} -focal={focal} -pixelsize={pixelsize} -noflip")
+                lines.append("pcc")
+            else:
+                lines.append(f"pcc -focal={focal} -pixelsize={pixelsize}")
+
+        # Denoise linéaire
+        denoise = profile.target.post.denoise
+        if denoise.siril_denoise:
+            lines.append(f"# Débruitage NL-Bayes (mod={denoise.siril_mod}, linéaire)")
+            lines.append(f"denoise -mod={denoise.siril_mod}")
+
+        # Stretch
+        lines += _stretch_lines(profile)
+
+        # Couleur + sharpening
+        lines += _color_lines(profile)
+        lines += _sharpening_lines(profile)
+        lines.append(f"save {prefix}")
+        lines.append("")
+        lines += _export_lines(profile, output_dir / prefix)
+        return lines
+
+    # --- Mode 4 couches (avec StarNet + GraXpert sur starless) ---
+    # Phase 1: stretch + StarNet -> starless (galaxie+fond) + starmask (étoiles)
+    # Phase 2 (Python/GraXpert): GraXpert extrait le fond du starless
+    # Phase 3 (Python): débruitage fond + recombinaison
     lines: list[str] = [
-        f"# --- Post-traitement : {img.name} ---",
+        f"# --- Post-traitement 4 couches : {img.name} ---",
+        f"# Phase 1 : Stretch + StarNet",
         f"load {img.stem}",
     ]
 
-    # Ordre : stretch d'abord (linéaire → non-linéaire), puis StarNet sur
-    # l'image non-linéaire, puis couleur et sharpening sur le starless.
+    # Pas de débruitage linéaire : il modifie la distribution des données
+    # et rend autoghs instable (image noire). Le débruitage se fait après
+    # le stretch (comme dans la version "nette amélioration").
+
+    # Stretch GHS (autoghs) : EXACTEMENT les paramètres du "fond parfait".
+    # D=3.0, HP=0.75, LP=0.02, shadows_clip=-2.0, B=13.0.
     lines += _stretch_lines(profile)
-    lines += _starnet_lines(profile)
-    lines += _color_lines(profile)
-    lines += _sharpening_lines(profile)
-    lines.append(f"save {prefix}")
+
+    # Débruitage NL-Bayes après le stretch (comme dans la version qui marchait).
+    denoise = profile.target.post.denoise
+    if denoise.siril_denoise:
+        lines.append(f"# Débruitage NL-Bayes + DA3D (mod={denoise.siril_mod})")
+        lines.append(f"denoise -mod={denoise.siril_mod} -da3d")
+
+    # StarNet : sépare l'image étirée en starless + star_mask
+    lines.append("# Configuration StarNet (chemin de l'exécutable)")
+    lines.append("set core.starnet_exe=/usr/local/bin/starnet2")
+    lines.append("# StarNet : séparation étoiles / starless")
+    starnet_opts: list[str] = []
+    if starnet.upscale:
+        starnet_opts.append("-upscale")
+    if starnet.stretch_linear:
+        starnet_opts.append("-stretch")
+    lines.append(f"starnet {' '.join(starnet_opts)}".rstrip())
+    starmask_name = f"starmask_{img.stem}"
+    lines.append(f"# Sauvegarde du starless (image courante après starnet)")
+    lines.append(f"save {prefix}_starless")
+    lines.append(f"# Chargement et sauvegarde du star_mask sous un nom fixe")
+    lines.append(f"load {starmask_name}")
+    lines.append(f"save {prefix}_starmask")
     lines.append("")
-
-    lines += _export_lines(profile, output_dir / prefix)
-
+    lines.append(f"# Phase 2 et 3 : GraXpert + recombinaison (faite en Python)")
+    lines.append(f"# GraXpert extrait le fond du starless, puis recombinaison Python")
+    lines.append("")
     return lines
 
 
@@ -713,6 +885,154 @@ def run_post(
             f"Script exécuté : {post_script_path}\n"
             f"--- Sortie Siril ---\n{process.stdout[-3000:]}\n{process.stderr[-2000:]}"
         )
+
+    # Si StarNet est activé, la recombinaison se fait en Python (addmax non scriptable).
+    starnet_enabled = profile.target.post.starnet.enabled
+    if starnet_enabled:
+        starless = output_dir / "final_starless.fit"
+        starmask = output_dir / "final_starmask.fit"
+        for f in [starless, starmask]:
+            if not f.exists():
+                raise SirilExecutionError(
+                    f"Recombinaison 4 couches : fichier manquant : {f}\n"
+                    f"--- Sortie Siril ---\n{process.stdout[-2000:]}"
+                )
+
+        from astropy.io import fits
+        from scipy.ndimage import median_filter
+        from astro_pipeline.engines import graxpert
+
+        # Étape 1: GraXpert sur le starless étiré pour extraire le fond.
+        starless_bg, bg_commands = graxpert.run_background_only(
+            starless, output_dir, profile, dry_run=dry_run
+        )
+        if not starless_bg.exists():
+            raise SirilExecutionError(
+                f"GraXpert n'a pas produit le starless sans fond : {starless_bg}\n"
+            )
+
+        # Étape 2: Script Siril pour traiter séparément galaxie et étoiles.
+        # - Galaxie (starless_bg): rmgreen pour corriger le vert + background_clip.
+        # - Étoiles (starmask): rmgreen pour corriger le vert + léger flou pour rondeur.
+        treat_script = process_dir / "treat_layers.ssf"
+        color = profile.target.post.color
+        treat_lines = [
+            f"requires {MIN_VERSION}",
+            "",
+            "cd output",
+            "",
+            "# --- Traitement de la galaxie (starless sans fond) ---",
+            f"load final_starless_bg",
+        ]
+        # rmgreen sur la galaxie
+        if color.rmgreen:
+            scnr_type = "1" if color.rmgreen_type == "maximum" else "0"
+            treat_lines.append(f"# Correction du vert sur la galaxie (SCNR {color.rmgreen_type})")
+            treat_lines.append(f"rmgreen {scnr_type}")
+        # Background clip sur la galaxie
+        if color.background_clip > 0:
+            treat_lines.append(f"# Assombrissement du fond (clip {color.background_clip:.3f})")
+            treat_lines.append(f"mtf {color.background_clip:.3f} 0.5 1.0")
+        treat_lines.append("save final_galaxy_proc")
+        treat_lines.append("")
+
+        # Sharpening sur la galaxie (révèle les détails des bras spiraux)
+        sharp = profile.target.post.sharpening
+        if sharp.enabled:
+            treat_lines.append(f"# Recharger la galaxie pour sharpening")
+            treat_lines.append(f"load final_galaxy_proc")
+            if sharp.method == "unsharp":
+                treat_lines.append(f"# Sharpening galaxie (unsharp)")
+                treat_lines.append(f"unsharp {sharp.sigma} {sharp.amount}")
+            treat_lines.append("save final_galaxy_proc")
+            treat_lines.append("")
+
+        # --- Traitement des étoiles ---
+        treat_lines.append("# --- Traitement des étoiles ---")
+        treat_lines.append("load final_starmask")
+        # rmgreen sur les étoiles (corrige le vert)
+        if color.rmgreen:
+            treat_lines.append(f"# Correction du vert sur les étoiles (SCNR)")
+            treat_lines.append(f"rmgreen {scnr_type}")
+        # Pas de flou gaussien : il fait disparaître les petites étoiles.
+        # Les étoiles sont laissées telles quelles pour préserver toutes les
+        # étoiles faibles (le starmask de StarNet est déjà propre).
+        treat_lines.append("save final_starmask_proc")
+        treat_lines.append("")
+
+        treat_script.write_text("\n".join(treat_lines) + "\n", encoding="utf-8")
+        cmd_treat = [str(binary), "-d", str(session_dir), "-s", str(treat_script)]
+        proc_treat = subprocess.run(cmd_treat, capture_output=True, text=True, check=False)
+        if proc_treat.returncode != 0:
+            raise SirilExecutionError(
+                f"Siril traitement des couches a échoué (code {proc_treat.returncode}).\n"
+                f"--- Sortie Siril ---\n{proc_treat.stdout[-2000:]}"
+            )
+
+        # Étape 3: Recombinaison Python.
+        galaxy_proc = output_dir / "final_galaxy_proc.fit"
+        starmask_proc = output_dir / "final_starmask_proc.fit"
+        for f in [galaxy_proc, starmask_proc]:
+            if not f.exists():
+                raise SirilExecutionError(
+                    f"Recombinaison : fichier manquant : {f}\n"
+                    f"--- Sortie Siril ---\n{proc_treat.stdout[-1000:]}"
+                )
+
+        with fits.open(starless) as hdul_sl, fits.open(starless_bg) as hdul_sbg, fits.open(starmask_proc) as hdul_sm:
+            data_starless = hdul_sl[0].data.astype("float32")
+            data_starless_bg = hdul_sbg[0].data.astype("float32")
+            data_starmask = hdul_sm[0].data.astype("float32")
+
+        with fits.open(galaxy_proc) as hdul_gp:
+            data_galaxy_proc = hdul_gp[0].data.astype("float32")
+
+        # Le fond = starless - starless_bg (ce que GraXpert a retiré)
+        data_bg = data_starless - data_starless_bg
+        data_bg = np.clip(data_bg, 0, None)
+
+        # Débruitage du fond: filtre médian large
+        data_bg_denoised = np.zeros_like(data_bg)
+        for i in range(data_bg.shape[0] if data_bg.ndim == 3 else 1):
+            ch = data_bg[i] if data_bg.ndim == 3 else data_bg
+            ch_denoised = median_filter(ch, size=25)
+            if data_bg.ndim == 3:
+                data_bg_denoised[i] = ch_denoised
+            else:
+                data_bg_denoised = ch_denoised
+
+        # Recombinaison: fond lissé + galaxie traitée + étoiles traitées
+        combined = data_bg_denoised + data_galaxy_proc
+        combined = np.maximum(combined, data_starmask)
+
+        combined = combined.astype(">f4")
+        hdr = hdul_sl[0].header
+        fits.writeto(output_dir / "final.fit", combined, hdr, overwrite=True)
+
+        # Export TIFF via Siril (script séparé pour l'export uniquement).
+        if profile.target.post.export.enabled:
+            export_script = process_dir / "export.ssf"
+            if export_ext == "tif":
+                export_cmd = f"savetif {export_name} -deflate"
+            elif export_ext == "png":
+                export_cmd = f"savepng {export_name}"
+            else:
+                export_cmd = f"savejpg {export_name}"
+            export_lines = [
+                f"requires {MIN_VERSION}",
+                "",
+                "cd output",
+                "load final",
+                export_cmd,
+            ]
+            export_script.write_text("\n".join(export_lines) + "\n", encoding="utf-8")
+            cmd_export = [str(binary), "-d", str(session_dir), "-s", str(export_script)]
+            proc_export = subprocess.run(cmd_export, capture_output=True, text=True, check=False)
+            if proc_export.returncode != 0:
+                raise SirilExecutionError(
+                    f"Siril export a échoué (code {proc_export.returncode}).\n"
+                    f"--- Sortie Siril ---\n{proc_export.stdout[-2000:]}"
+                )
 
     if profile.target.post.export.enabled and not export_path.exists():
         raise SirilExecutionError(

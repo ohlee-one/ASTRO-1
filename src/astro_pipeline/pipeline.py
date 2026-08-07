@@ -65,12 +65,17 @@ def validate_session(session_dir: Path, profile: Profile) -> None:
 
     C'est délibérément fait en premier : mieux vaut échouer en deux secondes
     qu'après quarante minutes d'empilement.
+
+    Les dossiers darks/flats peuvent être vides (preview sans calibration),
+    mais le dossier lights doit contenir au moins une image.
     """
     if not session_dir.exists():
         raise SessionError(f"Le dossier de session n'existe pas : {session_dir}")
 
     folders = profile.setup.folders
-    required = [folders.lights, folders.darks, folders.flats]
+    # lights est toujours obligatoire. darks/flats sont créés s'ils manquent.
+    required = [folders.lights]
+    optional = [folders.darks, folders.flats]
     if profile.setup.calibration.use_biases and not profile.setup.calibration.use_premade_masters:
         required.append(folders.biases)
 
@@ -78,12 +83,14 @@ def validate_session(session_dir: Path, profile: Profile) -> None:
     if missing:
         raise SessionError(
             f"Dossiers manquants dans {session_dir} : {', '.join(missing)}\n"
-            f"Structure attendue : {', '.join(required)}\n"
-            f"(Si tu n'utilises pas d'offsets, mets use_biases: false "
-            f"dans ton profil setup.)"
+            f"Structure attendue : lights (darks/flats optionnels)"
         )
 
-    # Vérifie que les dossiers ne sont pas vides
+    # Crée les dossiers darks/flats s'ils n'existent pas (Siril les attend)
+    for name in optional:
+        (session_dir / name).mkdir(exist_ok=True)
+
+    # Vérifie que les dossiers obligatoires ne sont pas vides
     for name in required:
         if not any((session_dir / name).iterdir()):
             raise SessionError(f"Le dossier {name}/ est vide.")
@@ -139,23 +146,67 @@ def run(
     # En mode haoiii, on ne fait QUE l'extraction du fond de ciel ici
     # (pas le débruitage, car les couches sont monochromes).
     # Le débruitage se fera après la recomposition RGB (étape 4).
-    step += 1
-    bg_label = "fond de ciel" if is_haoiii else "fond de ciel, débruitage"
-    logger.step(step, total_steps, "GraXpert", bg_label)
+    #
+    # Si use_siril_subsky est activé, le gradient a été partiellement retiré
+    # par Siril (seqsubsky) sur chaque pose individuelle. Mais un gradient
+    # résiduel réapparaît après empilement. Si use_graxpert_post_stack est
+    # activé, GraXpert (modèle IA) est utilisé pour corriger ce gradient
+    # résiduel post-empilement (meilleur que le subsky Siril).
+    bg_settings = profile.target.post.background_extraction
+    use_graxpert_bg = bg_settings.enabled and bg_settings.use_graxpert_post_stack
+    skip_graxpert_bg = bg_settings.enabled and bg_settings.use_siril_subsky and not use_graxpert_bg
 
-    bg_processed: list[Path] = []
-    for path in stacked:
-        result, step_commands = graxpert.run_background_only(
-            path, output_dir, profile, dry_run=dry_run
-        )
-        bg_processed.append(result)
-        commands.extend(step_commands)
-        for command in step_commands:
-            logger.command(command)
-        if dry_run:
-            logger.info(f"      → {result.name}")
-        else:
-            logger.success(result.name)
+    bg_processed: list[Path] = stacked  # par défaut, on garde les fichiers tels quels
+
+    # GraXpert est nécessaire si :
+    # - on n'utilise pas seqsubsky (extraction de fond par GraXpert), OU
+    # - use_graxpert_post_stack (GraXpert IA post-empilement), OU
+    # - le débruitage GraXpert est activé.
+    denoise_enabled = profile.target.post.denoise.enabled and not is_haoiii
+    needs_graxpert = is_haoiii or not skip_graxpert_bg or denoise_enabled
+
+    if needs_graxpert:
+        step += 1
+        bg_label = "fond de ciel" if is_haoiii else "fond de ciel, débruitage"
+        if use_graxpert_bg and not is_haoiii:
+            bg_label = "fond de ciel IA post-empilement (GraXpert)"
+        elif skip_graxpert_bg and not is_haoiii:
+            bg_label = "débruitage (gradient déjà retiré par Siril)"
+        logger.step(step, total_steps, "GraXpert", bg_label)
+
+        bg_processed = []
+        for path in stacked:
+            if skip_graxpert_bg:
+                # GraXpert seulement pour le débruitage si activé, pas le background
+                if profile.target.post.denoise.enabled:
+                    result, step_commands = graxpert.run_denoise_only(
+                        path, output_dir, profile, dry_run=dry_run
+                    )
+                    bg_processed.append(result)
+                    commands.extend(step_commands)
+                    for command in step_commands:
+                        logger.command(command)
+                    if dry_run:
+                        logger.info(f"      → {result.name}")
+                    else:
+                        logger.success(result.name)
+                else:
+                    bg_processed.append(path)
+            else:
+                result, step_commands = graxpert.run_background_only(
+                    path, output_dir, profile, dry_run=dry_run
+                )
+                bg_processed.append(result)
+                commands.extend(step_commands)
+                for command in step_commands:
+                    logger.command(command)
+                    if dry_run:
+                        logger.info(f"      → {result.name}")
+                    else:
+                        logger.success(result.name)
+    else:
+        # RGB mode avec subsky : GraXpert complètement skippé
+        logger.info("  GraXpert skippé (gradient retiré par seqsubsky Siril)")
 
     # === Étapes 3-4 spécifiques au mode HaOIII ===============================
     denoise_input: list[Path] = bg_processed

@@ -1,8 +1,15 @@
 # ============================================================================
-# TEMPLATE — Galaxie en RGB
+# TEMPLATE — Galaxie en RGB (traitement par couches)
 # ============================================================================
 # Les galaxies sont des objets étendus à faible surface brillante. Le défi :
 # révéler les bras spiraux et les régions HII sans sur-briller le noyau.
+#
+# Ce template utilise le traitement par couches (multi-layer) :
+#   1. Stretch GHS + débruitage sur l'image complète
+#   2. StarNet : séparation étoiles / starless
+#   3. GraXpert : extraction du fond sur le starless
+#   4. Traitement indépendant de la galaxie (rmgreen, sharpening) et des étoiles
+#   5. Recombinaison Python (fond lissé + galaxie + étoiles)
 #
 # Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
 # ============================================================================
@@ -11,67 +18,107 @@ name: "Galaxie RGB (template)"
 
 processing:
   mode: "rgb"
+  resample: "none"
+  linear_match: false
 
 stacking:
   rejection: "winsorized"
-  sigma_low: 3.0
-  sigma_high: 3.0
+  sigma_low: 2.5
+  sigma_high: 2.5
   normalization: "addscale"
 
 registration:
   min_stars: 10
 
 post:
+  # ======================================================================
+  # Extraction de fond : seqsubsky (par pose) + GraXpert (post-empilement)
+  # ======================================================================
   background_extraction:
     enabled: true
-    # Les galaxies ont souvent un gradient doux → lissage modéré.
-    smoothing: 0.3
+    # Étape 1 : seqsubsky sur chaque pose calibrée (gradient par pose)
+    use_siril_subsky: true
+    subsky_method: "poly"
+    subsky_degree: 1
+    subsky_samples: 30
+    subsky_tolerance: 1.0
+    subsky_smooth: 0.5
+    # Étape 2 : GraXpert (modèle IA) sur l'image empilée pour le gradient résiduel
+    use_graxpert_post_stack: true
+    smoothing: 0.5
     correction: "subtraction"
+    # Étape 3 : subsky sur le starless étiré (phase 2 du traitement par couches)
+    post_subsky_method: "rbf"
+    post_subsky_degree: 2
+    post_subsky_samples: 80
+    post_subsky_tolerance: 0.5
+    post_subsky_smooth: 0.8
 
   denoise:
-    # Les galaxies ont un signal faible → débruitage utile mais délicat.
-    # Si activé, reste très doux (0.3 max) pour ne pas perdre les bras spiraux.
+    # GraXpert denoise désactivé (modèle IA à télécharger séparément).
+    # On utilise le denoise natif Siril (NL-Bayes + DA3D) après le stretch.
     enabled: false
-    strength: 0.3
+    strength: 0.5
     batch_size: 8
+    # Débruitage NL-Bayes natif Siril, appliqué APRÈS le stretch.
+    # mod=0.4 : 40% signal original, 60% débruité. Bon compromis pour le fond.
+    siril_denoise: true
+    siril_mod: 0.4
 
+  # ======================================================================
+  # StarNet : séparation en couches (étoiles / starless)
+  # ======================================================================
+  # Active la séparation StarNet2 pour traiter indépendamment :
+  #   - Le starless (galaxie + fond) -> GraXpert extrait le fond
+  #   - Les étoiles -> traitement séparé (rondeur, couleur)
   starnet:
-    enabled: false
+    enabled: true
     upscale: false
     stretch_linear: false
 
+  # ======================================================================
+  # Stretch : GHS (Generalized Hyperbolic Stretch)
+  # ======================================================================
+  # GHS avec D=3.0, shadows_clip=-1.5 : stable et produit un fond propre.
+  # linked=true : préserve la couleur naturelle des galaxies.
   stretch:
     enabled: true
-    method: "autostretch"
-    # linked=true : préserve la couleur naturelle des galaxies (coeur jaune,
-    # bras bleus, régions HII roses).
+    method: "ght"
     linked: true
-    # shadows_clip plus négatif pour préserver les extensions faibles des bras.
-    shadows_clip: -3.0
-    target_bg: 0.22
+    shadows_clip: -1.5
+    ghs_d: 3.0
+    ghs_sp: 0.15
+    ghs_hp: 0.75
+    ghs_lp: 0.02
+    ghs_b: 13.0
 
+  # ======================================================================
+  # Couleur : suppression du vert + équilibrage
+  # ======================================================================
   color:
     enabled: true
-    # Les galaxies ont moins de vert résiduel que les nébuleuses → average.
+    photometric_cc: false
     rmgreen: true
+    # "average" pour les galaxies (moins de vert résiduel que les nébuleuses).
     rmgreen_type: "average"
-    # Saturation modérée : les galaxies ont des couleurs subtiles.
-    saturation_boost: 0.6
-    saturation_threshold: 0.5
+    saturation_boost: 0.8
+    saturation_threshold: 1.0
     hue_range: 6
-    # Pas de boost ciblé : on veut des couleurs naturelles.
     target_hue_boost: 0.0
     blue_shift: 0.0
-    # Assombrir le fond pour faire ressortir les bras spiraux faibles.
-    background_clip: 0.03
+    background_clip: 0.05
 
+  # ======================================================================
+  # Sharpening : sur la couche galaxie uniquement
+  # ======================================================================
+  # Le sharpening s'applique sur la galaxie sans fond ni étoiles pour révéler
+  # les bras spiraux sans amplifier le bruit du fond.
+  # sigma=2.0 capte les structures larges des bras spiraux.
   sharpening:
-    # Les galaxies bénéficient d'un sharpening un peu plus poussé pour
-    # révéler les bras spiraux et les régions HII.
     enabled: true
     method: "unsharp"
-    sigma: 1.0
-    amount: 0.6
+    sigma: 2.0
+    amount: 1.2
 
   star_reduction:
     enabled: false
