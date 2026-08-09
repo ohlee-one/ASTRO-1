@@ -85,6 +85,7 @@ TARGETS: dict[str, str] = {
     "Amas d'étoiles": "cluster-rgb",
     "Comète": "comet-rgb",
     "Reste de supernova (Veil, etc.)": "snr-narrowband",
+    "Star trails (traînées d'étoiles)": "star-trails",
 }
 
 TEMPLATES_DIR = PROFILES_DIR.parent / "templates"

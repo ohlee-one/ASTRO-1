@@ -1,0 +1,91 @@
+# ============================================================================
+# TEMPLATE — Star trails (traînées d'étoiles)
+# ============================================================================
+# Les star trails sont créées en empilant des poses successives par maximum
+# pixel-wise (lighten blend). Chaque étoile trace sa trajectoires dans le ciel.
+#
+# Pas de calibration, pas d'alignement, pas de StarNet. Le pipeline est :
+#   1. Conversion des RAW en FITS + dématriçage
+#   2. Empilement par maximum (stack max)
+#   3. Stretch + couleur + export
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Star trails (template)"
+
+processing:
+  mode: "startrails"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  # Pas de rejection en mode star trails (stack max, pas de rejection possible)
+  rejection: "none"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "none"
+
+registration:
+  # Pas de registration en mode star trails
+  min_stars: 10
+
+post:
+  background_extraction:
+    # Pas d'extraction de fond pour les star trails
+    enabled: false
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    # Pas de StarNet pour les star trails
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    # Autostretch pour les star trails : les traînées sont déjà lumineuses,
+    # il faut juste révéler le fond de ciel et les couleurs.
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.0
+    target_bg: 0.15
+
+  color:
+    enabled: true
+    photometric_cc: false
+    # rmgreen pour nettoyer la pollution lumineuse verte
+    rmgreen: true
+    rmgreen_type: "average"
+    # Saturation modérée pour de belles couleurs d'étoiles
+    saturation_boost: 0.5
+    saturation_threshold: 1.0
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    # Assombrir le fond pour faire ressortir les traînées
+    background_clip: 0.05
+
+  sharpening:
+    # Pas de sharpening pour les star trails (amplifierait le bruit du fond)
+    enabled: false
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

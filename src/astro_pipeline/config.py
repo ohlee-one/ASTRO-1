@@ -89,16 +89,20 @@ class Registration(BaseModel):
 
 
 class Processing(BaseModel):
-    """Mode de traitement : couleur classique, ou extraction bande étroite.
+    """Mode de traitement : couleur classique, bande étroite, ou star trails.
 
-    - "rgb"    : dématriçage classique -> une seule image couleur.
-    - "haoiii" : PAS de dématriçage. Les couches Ha (pixels rouges) et OIII
-                 (pixels verts/bleus) sont extraites de la matrice de Bayer,
-                 puis empilées séparément. C'est le traitement adapté aux
-                 filtres dual-band type L-eXtreme, L-Ultimate, Duo-Band.
+    - "rgb"       : dématriçage classique -> une seule image couleur.
+    - "haoiii"    : PAS de dématriçage. Les couches Ha (pixels rouges) et OIII
+                    (pixels verts/bleus) sont extraites de la matrice de Bayer,
+                    puis empilées séparément. C'est le traitement adapté aux
+                    filtres dual-band type L-eXtreme, L-Ultimate, Duo-Band.
+    - "startrails": Pas de calibration, pas d'alignement. Les photos sont
+                    converties en FITS puis empilées par maximum pixel-wise
+                    (chaque pixel = la valeur la plus élevée de toutes les
+                    frames). Les étoiles tracent leurs trajectoires.
     """
 
-    mode: Literal["rgb", "haoiii"] = "rgb"
+    mode: Literal["rgb", "haoiii", "startrails"] = "rgb"
 
     # Le Ha ne provient que d'1 pixel sur 4 : il sort en demi-résolution,
     # alors que l'OIII sort en pleine résolution. Il faut les remettre à la

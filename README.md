@@ -127,6 +127,7 @@ and equipment:
 | `cluster-rgb.yaml` | Star cluster (open or globular) |
 | `comet-rgb.yaml` | Comet |
 | `snr-narrowband.yaml` | Supernova remnant (Veil, Cygnus Loop…) |
+| `star-trails.yaml` | Star trails (star trails with maximum stacking) |
 
 ### Interactive wizard
 
@@ -141,7 +142,7 @@ The wizard guides you step by step, **with no technical knowledge required**:
 1. **Camera**: pick your model from a list (ASI294MC, ASI533MC, Canon 600D…) or enter a name. Pixel size is automatically inferred.
 2. **Filter**: select your filter (L-eXtreme, L-Pro, Ha 7nm…). The processing type is automatically derived.
 3. **Pre-stacked files**: indicate whether your darks/flats are already stacked by your acquisition software (ASIAIR, NINA) and whether you shoot separate bias frames.
-4. **Target**: choose the object type (nebula, galaxy, cluster, comet…) and give it a name (M42, IC1805…).
+4. **Target**: choose the object type (nebula, galaxy, cluster, comet, star trails…) and give it a name (M42, IC1805…).
 
 YAML profiles are generated automatically in `profiles/`. No need to copy and
 edit templates by hand.

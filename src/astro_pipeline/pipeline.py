@@ -6,16 +6,21 @@ les appeler et de gérer les chemins, les vérifications, le logging et l'affich
 Le pipeline complet :
 
 Mode RGB :
-  1. Siril    : calibration, registration, empilement → FITS linéaire RGB
+  1. Siril    : calibration, registration, empilement -> FITS linéaire RGB
   2. GraXpert : extraction fond de ciel + débruitage IA (sur le linéaire)
   3. Siril    : stretch, StarNet, couleur, sharpening, export
 
 Mode HaOIII (bande étroite) :
-  1. Siril    : calibration, extraction Ha/OIII, empilement → 2 FITS monochromes
+  1. Siril    : calibration, extraction Ha/OIII, empilement -> 2 FITS monochromes
   2. GraXpert : extraction fond de ciel (sur chaque couche monochrome)
-  3. Siril    : recomposition Ha+OIII → RGB linéaire
-  4. GraXpert : débruitage IA (sur l'RGB recomposé — nécessite 3 canaux)
+  3. Siril    : recomposition Ha+OIII -> RGB linéaire
+  4. GraXpert : débruitage IA (sur l'RGB recomposé, nécessite 3 canaux)
   5. Siril    : stretch, StarNet, couleur, sharpening, export
+
+Mode Star trails :
+  1. Siril    : conversion RAW + dématriçage + empilement par maximum
+  2. Siril    : stretch, couleur, export
+  Pas de calibration, pas d'alignement, pas de GraXpert, pas de StarNet.
 
 La différence clé : en mode haoiii, le débruitage IA de GraXpert ne peut pas
 fonctionner sur les couches monochromes (1 canal). Il faut recomposer en RGB
@@ -103,7 +108,7 @@ def run(
 ) -> PipelineResult:
     """Exécute le pipeline complet sur une session.
 
-    Le flow diffère selon le mode (rgb vs haoiii) — voir la docstring du module.
+    Le flow diffère selon le mode (rgb vs haoiii vs startrails) — voir la docstring du module.
     """
     session_dir = session_dir.expanduser().resolve()
     validate_session(session_dir, profile)
@@ -119,10 +124,68 @@ def run(
 
     mode = profile.target.processing.mode
     is_haoiii = mode == "haoiii"
-    mode_label = mode + (" (extraction bande étroite Ha + OIII)" if is_haoiii else "")
+    is_startrails = mode == "startrails"
+    mode_label = mode
+    if is_haoiii:
+        mode_label += " (extraction bande étroite Ha + OIII)"
+    elif is_startrails:
+        mode_label += " (empilement par maximum, pas de registration)"
     logger.info(f"Mode    : {mode_label}")
     logger.info(f"Log     : {logger.log_path}")
 
+    # === Mode star trails : pipeline simplifié ================================
+    # Pas de calibration, pas de GraXpert, pas de StarNet.
+    # 1. Siril : conversion + empilement par max
+    # 2. Siril : stretch + couleur + export
+    if is_startrails:
+        total_steps = 2
+        step = 0
+        scripts: list[Path] = []
+        commands: list[list[str]] = []
+
+        # Étape 1 : Siril — conversion + empilement par max
+        step += 1
+        logger.step(step, total_steps, "Siril", "conversion RAW + empilement par maximum")
+        stacked = siril.run_startrails(session_dir, profile, dry_run=dry_run)
+        script1 = session_dir / "process" / "generated.ssf"
+        scripts.append(script1)
+        logger.info(f"      Script : {script1}")
+        for path in stacked:
+            if dry_run:
+                logger.info(f"      → {path.name}")
+            else:
+                logger.success(path.name)
+
+        # Étape 2 : Siril — stretch + couleur + export
+        step += 1
+        logger.step(step, total_steps, "Siril", "stretch, couleur, export")
+        exported = siril.run_post(session_dir, profile, stacked, dry_run=dry_run)
+        script_post = session_dir / "process" / "post_processing.ssf"
+        scripts.append(script_post)
+        logger.info(f"      Script : {script_post}")
+
+        if exported:
+            if dry_run:
+                logger.info(f"      → {exported.name}")
+            else:
+                logger.success(exported.name)
+        else:
+            logger.warning("Export désactivé dans le profil")
+
+        logger.rule("Terminé" if not dry_run else "Simulation terminée")
+        logger.info(f"Log complet : {logger.log_path}")
+        logger.close()
+
+        return PipelineResult(
+            stacked=stacked,
+            processed=stacked,
+            exported=exported,
+            scripts=scripts,
+            commands=commands,
+            log_path=logger.log_path,
+        )
+
+    # === Pipeline classique (rgb / haoiii) ====================================
     # Le nombre d'étapes dépend du mode (haoiii a 2 étapes de plus)
     total_steps = 5 if is_haoiii else 3
     step = 0

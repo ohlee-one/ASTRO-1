@@ -760,6 +760,118 @@ def expected_outputs(session_dir: Path, profile: Profile) -> list[Path]:
     return [output_dir / "result.fit"]
 
 
+def build_startrails_script(session_dir: Path, profile: Profile) -> str:
+    """Construit le script .ssf pour le mode star trails.
+
+    Le mode star trails est fondamentalement différent du pipeline classique :
+      - Pas de calibration (pas de darks/flats/biases)
+      - Pas de registration (les étoiles DOIVENT tracer leurs trajectoires)
+      - Empilement par maximum pixel-wise (lighten blend)
+      - Le reste (stretch, couleur, export) est identique au mode rgb
+
+    Le script produit result.fit dans output/.
+    """
+    folders = profile.setup.folders
+    sensor = profile.setup.sensor
+
+    lines: list[str] = [
+        f"requires {MIN_VERSION}",
+        "",
+        "# ---- Script généré automatiquement par astro-pipeline ----",
+        "# ---- Mode star trails : conversion + empilement par max ---",
+        f"# Setup : {profile.setup.name}",
+        f"# Cible : {profile.target.name}",
+        "",
+        "# Conversion des RAW en séquence FITS",
+        f"cd {folders.lights}",
+        "convert light -out=../process",
+        "cd ../process",
+        "",
+    ]
+
+    # Dématriçage si capteur couleur
+    calibrate_options = []
+    if sensor.color:
+        calibrate_options.append("-cfa")
+        if sensor.equalize_cfa:
+            calibrate_options.append("-equalize_cfa")
+        calibrate_options.append("-debayer")
+
+    if calibrate_options:
+        lines += [
+            "# Dématriçage (capteur couleur)",
+            f"calibrate light_ {' '.join(calibrate_options)}",
+            "",
+        ]
+        light_prefix = "pp_light_"
+    else:
+        light_prefix = "light_"
+
+    # Empilement par MAXIMUM (pas de registration, pas de normalisation)
+    # Chaque pixel = la valeur la plus élevée de toutes les frames.
+    # C'est ce qui crée les traînées d'étoiles.
+    lines += [
+        "# Empilement par maximum (lighten blend) — pas de registration",
+        f"stack {light_prefix} max -out=../output/result",
+        "",
+        "# Rechargement du résultat pour vérification",
+        "load ../output/result",
+        "stat",
+        "close",
+    ]
+
+    return "\n".join(lines) + "\n"
+
+
+def run_startrails(
+    session_dir: Path, profile: Profile, dry_run: bool = False
+) -> list[Path]:
+    """Exécute le mode star trails : conversion + empilement par max.
+
+    Retourne la liste des fichiers empilés (un seul : result.fit).
+    """
+    binary = find_binary()
+    if binary is None:
+        raise SirilNotFoundError(
+            "siril-cli est introuvable.\n"
+            "Installe-le avec :  brew install --cask siril\n"
+        )
+
+    process_dir = session_dir / "process"
+    output_dir = session_dir / "output"
+    process_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
+
+    script_path = process_dir / "generated.ssf"
+    script_path.write_text(build_startrails_script(session_dir, profile), encoding="utf-8")
+
+    results = [output_dir / "result.fit"]
+
+    if dry_run:
+        return results
+
+    command = [str(binary), "-d", str(session_dir), "-s", str(script_path)]
+    process = subprocess.run(command, capture_output=True, text=True, check=False)
+
+    if process.returncode != 0:
+        raise SirilExecutionError(
+            f"Siril s'est arrêté avec le code {process.returncode} "
+            f"(star trails : conversion + empilement).\n"
+            f"Script exécuté : {script_path}\n"
+            f"--- Sortie Siril ---\n{process.stdout[-3000:]}\n{process.stderr[-2000:]}"
+        )
+
+    missing = [path for path in results if not path.exists()]
+    if missing:
+        names = ", ".join(path.name for path in missing)
+        raise SirilExecutionError(
+            f"Siril s'est terminé sans erreur mais ces fichiers manquent : {names}\n"
+            f"{process.stdout[-3000:]}"
+        )
+
+    return results
+
+
 def final_output_name(profile: Profile) -> str:
     """Nom de base du fichier final produit par la phase finale."""
     if profile.target.processing.mode == "haoiii":

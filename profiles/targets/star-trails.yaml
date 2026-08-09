@@ -1,0 +1,74 @@
+# ============================================================================
+# PROFIL CIBLE — Star trails
+# ============================================================================
+# Traînées d'étoiles créées par empilement par maximum (lighten blend).
+# Pas de calibration, pas d'alignement.
+# ============================================================================
+
+name: "Star trails"
+
+processing:
+  mode: "startrails"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  rejection: "none"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "none"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: false
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.0
+    target_bg: 0.15
+
+  color:
+    enabled: true
+    photometric_cc: false
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.5
+    saturation_threshold: 1.0
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    background_clip: 0.05
+
+  sharpening:
+    enabled: false
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

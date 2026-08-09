@@ -127,6 +127,7 @@ d'objet et de matériel :
 | `cluster-rgb.yaml` | Amas d'étoiles (ouvert ou globulaire) |
 | `comet-rgb.yaml` | Comète |
 | `snr-narrowband.yaml` | Reste de supernova (Veil, Cygnus Loop…) |
+| `star-trails.yaml` | Star trails (traînées d'étoiles par empilement max) |
 
 ### Assistant interactif (wizard)
 
@@ -141,7 +142,7 @@ Le wizard vous guide étape par étape, **sans aucune connaissance technique req
 1. **Caméra**: choisissez votre modèle dans une liste (ASI294MC, ASI533MC, Canon 600D…) ou entrez un nom. La taille des photosites est automatiquement déduite.
 2. **Filtre**: sélectionnez votre filtre (L-eXtreme, L-Pro, Ha 7nm…). Le type de traitement est déduit automatiquement.
 3. **Fichiers pré-empilés**: indiquez si vos darks/flats sont déjà empilés par votre logiciel d'acquisition (ASIAIR, NINA) et si vous shootez des bias séparés.
-4. **Cible**: choisissez le type d'objet (nébuleuse, galaxie, amas, comète…) et donnez-lui un nom (M42, IC1805…).
+4. **Cible**: choisissez le type d'objet (nébuleuse, galaxie, amas, comète, star trails…) et donnez-lui un nom (M42, IC1805…).
 
 Les profils YAML sont générés automatiquement dans `profiles/`. Plus besoin de copier et éditer les templates à la main.
 
