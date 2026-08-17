@@ -30,6 +30,11 @@ Mode Météores (Perséides, Géminides...) :
   Les star trails s'annulent dans la différence (similaires entre max et médian).
   Les météores restent car ils n'apparaissent qu'une fois (absents du médian).
 
+Mode Planétaire (lucky imaging) :
+  1. OpenCV   : lecture vidéo SER/AVI + tri par qualité + alignement + stack
+  2. Python   : RGB align (dispersion) + sharpening (ondelettes) + export TIFF
+  Pas de Siril, pas de GraXpert, pas de StarNet, pas de calibration.
+
 La différence clé : en mode haoiii, le débruitage IA de GraXpert ne peut pas
 fonctionner sur les couches monochromes (1 canal). Il faut recomposer en RGB
 (3 canaux) avant de débruiter.
@@ -45,7 +50,7 @@ import numpy as np
 from rich.console import Console
 
 from astro_pipeline.config import Profile
-from astro_pipeline.engines import graxpert, siril
+from astro_pipeline.engines import graxpert, planetary, siril
 from astro_pipeline.log import SessionLogger
 
 console = Console()
@@ -190,13 +195,16 @@ def run(
     is_haoiii = mode == "haoiii"
     is_startrails = mode == "startrails"
     is_meteors = mode == "meteors"
+    is_planetary = mode == "planetary"
     mode_label = mode
     if is_haoiii:
         mode_label += " (extraction bande étroite Ha + OIII)"
     elif is_startrails:
         mode_label += " (empilement par maximum, pas de registration)"
     elif is_meteors:
-        mode_label += " (registration + empilement par maximum, météores isolés)"
+        mode_label += " (soustraction max - médian, météores isolés)"
+    elif is_planetary:
+        mode_label += " (lucky imaging : tri, alignement, stack, ondelettes)"
     logger.info(f"Mode    : {mode_label}")
     logger.info(f"Log     : {logger.log_path}")
 
@@ -316,6 +324,51 @@ def run(
         return PipelineResult(
             stacked=stacked,
             processed=processed,
+            exported=exported,
+            scripts=scripts,
+            commands=commands,
+            log_path=logger.log_path,
+        )
+
+    # === Mode planetary : lucky imaging (planétaire, lune, soleil) ============
+    # Pas de Siril, pas de GraXpert, pas de StarNet. Tout en Python + OpenCV.
+    # 1. Lecture vidéo SER/AVI
+    # 2. Tri par qualité (Laplacien)
+    # 3. Alignement (corrélation de phase)
+    # 4. Empilement (moyenne)
+    # 5. RGB align (dispersion atmosphérique)
+    # 6. Sharpening (ondelettes)
+    # 7. Export TIFF
+    if is_planetary:
+        total_steps = 1
+        step = 0
+        scripts: list[Path] = []
+        commands: list[list[str]] = []
+
+        step += 1
+        logger.step(step, total_steps, "OpenCV",
+                    "lucky imaging : tri frames + alignement + stack + ondelettes + export")
+        exported_files = planetary.process_planetary(
+            session_dir, profile, dry_run=dry_run
+        )
+
+        for path in exported_files:
+            if dry_run:
+                logger.info(f"      → {path.name}")
+            else:
+                logger.success(path.name)
+
+        exported = exported_files[0] if exported_files else None
+        if not exported:
+            logger.warning("Aucune vidéo trouvée")
+
+        logger.rule("Terminé" if not dry_run else "Simulation terminée")
+        logger.info(f"Log complet : {logger.log_path}")
+        logger.close()
+
+        return PipelineResult(
+            stacked=exported_files,
+            processed=exported_files,
             exported=exported,
             scripts=scripts,
             commands=commands,

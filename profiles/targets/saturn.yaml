@@ -1,0 +1,64 @@
+# ============================================================================
+# PROFIL CIBLE — Saturne (lucky imaging)
+# ============================================================================
+# Saturne filmé en lucky imaging (vidéo SER).
+# 4 vidéos SER de tailles variables (600x600 et 400x400).
+# Le pipeline planétaire (OpenCV) trie les frames par qualité, aligne,
+# empile et applique des ondelettes pour révéler les anneaux et bandes.
+# ============================================================================
+
+name: "Saturne"
+
+processing:
+  mode: "planetary"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  rejection: "none"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "none"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: false
+
+  denoise:
+    enabled: false
+
+  starnet:
+    enabled: false
+
+  stretch:
+    enabled: false
+
+  color:
+    enabled: false
+
+  sharpening:
+    enabled: false
+
+  star_reduction:
+    enabled: false
+
+  planetary:
+    # Garder le quart des meilleures frames (seeing variable)
+    best_frames_fraction: 0.25
+    # Saturne = planète (disque compact)
+    alignment_mode: "planet"
+    # Ondelettes pour révéler les anneaux et les divisions
+    wavelet_sharpening: true
+    wavelet_layers: 5
+    wavelet_weights: [1.5, 1.2, 0.8, 0.4, 0.1]
+    drizzle_factor: 1.0
+    # Dispersion atmosphérique (Saturne bas sur l'horizon)
+    rgb_align: true
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

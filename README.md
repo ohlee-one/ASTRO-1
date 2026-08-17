@@ -129,6 +129,7 @@ and equipment:
 | `snr-narrowband.yaml` | Supernova remnant (Veil, Cygnus Loop…) |
 | `star-trails.yaml` | Star trails (star trails with maximum stacking) |
 | `meteors.yaml` | Meteors (Perseids, Geminids with registration + max stacking) |
+| `planetary.yaml` | Planetary / Moon (lucky imaging with OpenCV wavelets) |
 
 ### Interactive wizard
 

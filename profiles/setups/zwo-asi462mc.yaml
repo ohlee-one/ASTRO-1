@@ -1,0 +1,30 @@
+# ============================================================================
+# PROFIL SETUP — ZWO ASI462MC (planétaire)
+# ============================================================================
+# Caméra couleur ZWO ASI462MC utilisée pour le planétaire en lucky imaging.
+# Capteur couleur (Sony IMX462), très sensible dans le rouge/NIR.
+# Utilisée avec FireCapture pour la capture vidéo SER.
+# ============================================================================
+
+name: "ZWO ASI462MC"
+
+sensor:
+  color: true
+  bayer_pattern: "auto"
+  equalize_cfa: true
+
+optics:
+  focal_length_mm: 650
+  aperture_mm: 127
+  pixel_size_um: 2.315
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  use_biases: false
+  use_premade_masters: false
+  cosmetic_correction: false

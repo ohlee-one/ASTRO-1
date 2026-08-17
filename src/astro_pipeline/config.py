@@ -106,9 +106,15 @@ class Processing(BaseModel):
                     trails) et les météores restent visibles car ils
                     n'apparaissent qu'une seule fois, à des positions
                     aléatoires non alignees. Pas de calibration.
+    - "planetary" : Pour le planétaire et lunaire en lucky imaging. Les
+                    vidéos SER/AVI sont décomposées en frames, triées par
+                    qualité (seeing), alignées et empilées. Le sharpening
+                    se fait par ondelettes. Pas de calibration, pas de
+                    GraXpert, pas de StarNet. Utilise OpenCV directement
+                    (pas de Siril).
     """
 
-    mode: Literal["rgb", "haoiii", "startrails", "meteors"] = "rgb"
+    mode: Literal["rgb", "haoiii", "startrails", "meteors", "planetary"] = "rgb"
 
     # Le Ha ne provient que d'1 pixel sur 4 : il sort en demi-résolution,
     # alors que l'OIII sort en pleine résolution. Il faut les remettre à la
@@ -208,6 +214,54 @@ class StarReduction(BaseModel):
     # Force de la réduction, entre 0 (aucune) et 1 (agressif).
     # 0.5 est un bon point de départ pour des étoiles déjà propres.
     amount: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class Planetary(BaseModel):
+    """Paramètres spécifiques au mode planétaire (lucky imaging).
+
+    Le lucky imaging planétaire consiste à :
+      1. Filmer en vidéo haute cadence (SER, AVI) : des milliers de frames
+      2. Évaluer la qualité de chaque frame (seeing)
+      3. Garder uniquement les meilleures frames (ex: 25% des meilleures)
+      4. Aligner les frames sélectionnées
+      5. Empiler (stacking)
+      6. Appliquer des ondelettes (wavelets) pour révéler les détails
+
+    Contrairement au ciel profond, il n'y a pas de calibration (pas de
+    darks/flats), pas de GraXpert, pas de StarNet. Tout se fait avec OpenCV.
+    """
+
+    # Fraction de frames à garder, triées par qualité (seeing).
+    # 0.25 = garder le quart des meilleures frames. 0.50 = la moitié.
+    best_frames_fraction: float = Field(default=0.25, ge=0.01, le=1.0)
+
+    # Mode d'alignement :
+    # "planet"  : alignement sur le disque planétaire (détection de bord)
+    # "surface" : pour la Lune/Soleil (surface étendue, corrélation de phase)
+    alignment_mode: Literal["planet", "surface"] = "planet"
+
+    # Renforcement par ondelettes (wavelet sharpening).
+    # Le sharpening planétaire utilise des décompositions en ondelettes
+    # pour révéler les détails à différentes échelles.
+    wavelet_sharpening: bool = True
+    # Nombre de couches d'ondelettes (1 à 7).
+    # Chaque couche correspond à une échelle de détail : 1 = détails fins
+    # (bord de l'anneau), 5 = grandes structures (bandes nuageuses).
+    wavelet_layers: int = Field(default=5, ge=1, le=7)
+    # Force du sharpening par couche (0.0 = aucun, 1.0 = fort, 3.0 = extrême).
+    # Une liste typique : [1.5, 1.2, 0.8, 0.4, 0.1] pour renforcer surtout
+    # les détails fins.
+    wavelet_weights: list[float] = Field(
+        default_factory=lambda: [1.5, 1.2, 0.8, 0.4, 0.1]
+    )
+
+    # Facteur de drizzle (suréchantillonnage). 1.0 = pas de drizzle.
+    # 1.5x ou 2x pour les planètes avec peu de frames alignés.
+    drizzle_factor: float = Field(default=1.0, ge=1.0, le=3.0)
+
+    # RGB align : alignement des canaux rouge/vert/bleu séparément.
+    # Utile quand l'atmosphère décale les couleurs (dispersion atmosphérique).
+    rgb_align: bool = True
 
 
 class Stretch(BaseModel):
@@ -413,6 +467,7 @@ class Post(BaseModel):
     color: Color = Field(default_factory=Color)
     sharpening: Sharpening = Field(default_factory=Sharpening)
     star_reduction: StarReduction = Field(default_factory=StarReduction)
+    planetary: Planetary = Field(default_factory=Planetary)
     export: Export = Field(default_factory=Export)
 
 

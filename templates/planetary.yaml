@@ -1,0 +1,106 @@
+# ============================================================================
+# TEMPLATE — Planétaire / Lune (lucky imaging)
+# ============================================================================
+# Pour les planètes, la Lune et le Soleil en lucky imaging.
+# Les vidéos SER/AVI sont traitées avec OpenCV (pas de Siril) :
+#   1. Lecture des frames
+#   2. Tri par qualité (Laplacien = seeing)
+#   3. Alignement (corrélation de phase)
+#   4. Empilement (moyenne des meilleures frames)
+#   5. RGB align (correction dispersion atmosphérique)
+#   6. Sharpening par ondelettes
+#   7. Export TIFF
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Planétaire (template)"
+
+processing:
+  mode: "planetary"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  rejection: "none"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "none"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: false
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: false
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: false
+    photometric_cc: false
+    rmgreen: false
+    rmgreen_type: "average"
+    saturation_boost: 0.0
+    saturation_threshold: 1.0
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    background_clip: 0.0
+
+  sharpening:
+    enabled: false
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  planetary:
+    # Fraction des meilleures frames à garder (tri par qualité de seeing).
+    # 0.25 = garder le quart des meilleures frames.
+    best_frames_fraction: 0.25
+
+    # Mode d'alignement :
+    # "planet"  : pour les planètes (disque compact)
+    # "surface" : pour la Lune/Soleil (surface étendue)
+    alignment_mode: "planet"
+
+    # Sharpening par ondelettes (équivalent RegiStax wavelets)
+    wavelet_sharpening: true
+    wavelet_layers: 5
+    # Poids par couche : les premières couches = détails fins (anneaux, bord),
+    # les dernières = grandes structures (bandes nuageuses).
+    wavelet_weights: [1.5, 1.2, 0.8, 0.4, 0.1]
+
+    # Drizzle (suréchantillonnage). 1.0 = pas de drizzle.
+    drizzle_factor: 1.0
+
+    # Alignement RGB pour corriger la dispersion atmosphérique.
+    rgb_align: true
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

@@ -33,6 +33,7 @@ CAMERAS: dict[str, tuple[bool, float]] = {
     "ASI533MC": (True, 3.76),
     "ASI2600MC": (True, 3.76),
     "ASI585MC": (True, 2.315),
+    "ASI462MC": (True, 2.315),
     "ASI678MC": (True, 2.0),
     "ASI485MC": (True, 5.8),
     # ZWO monochrome
@@ -88,6 +89,7 @@ TARGETS: dict[str, str] = {
     "Reste de supernova (Veil, etc.)": "snr-narrowband",
     "Star trails (traînées d'étoiles)": "star-trails",
     "Météores (Perséides, Géminides...)": "meteors",
+    "Planétaire / Lune (lucky imaging)": "planetary",
 }
 
 TEMPLATES_DIR = PROFILES_DIR.parent / "templates"
@@ -292,6 +294,7 @@ def wizard_command() -> None:
         "Comète (template)",
         "Reste de supernova bande étroite (template)",
         "Météores (template)",
+        "Planétaire (template)",
     ]:
         content = content.replace(f'name: "{old_name}"', f'name: "{target_name}"')
 
