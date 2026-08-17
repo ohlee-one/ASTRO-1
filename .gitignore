@@ -25,12 +25,60 @@ build/
 /*/process/
 /*/logs/
 
-# FITS et images (ne pas committer les données astro)
+# RAW et données astro (ne pas committer les données brutes)
+*.CR2
+*.CR3
+*.NEF
+*.ARW
+*.RAF
+*.dng
 *.fit
 *.fits
 *.tif
 *.tiff
 *.xisf
+
+# Dossiers de sessions astro à la racine du projet
+# (contiennent lights/, darks/, flats/, etc.)
+Saturne/
+Star Trails/
+M81/
+M42/
+IC*/
+Vincennes/
+
+# RAW astro (CR2, NEF, ARW...)
+*.CR2
+*.cr2
+*.NEF
+*.nef
+*.ARW
+*.arw
+
+# Aperçus générés (ne pas committer)
+*_preview.png
+
+# RAW camera (ne pas committer les données astro)
+*.CR2
+*.CR3
+*.CRW
+*.NEF
+*.ARW
+*.RAF
+*.ORF
+*.RW2
+*.PEF
+*.SRW
+*.DNG
+
+# Dossiers de sessions brutes (tout ce qui contient des images astro)
+Saturne/
+Star Trails/
+M81/
+M 81/
+IC 1805 - 1848/
+IC 1848/
+Vincennes/
 
 # Logs
 *.log

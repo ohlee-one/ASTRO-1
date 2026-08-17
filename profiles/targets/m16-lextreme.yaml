@@ -1,0 +1,104 @@
+# ============================================================================
+# PROFIL CIBLE — M16 (Nebuleuse de l'Aigle) au filtre L-eXtreme
+# ============================================================================
+# M16 contient beaucoup de Ha (rouge) et d'OIII (cyan). Le L-eXtreme (dual-band
+# 7nm) isole bien ces deux bandes. Mode haoiii avec traitement par couches
+# et export de 3 TIFFs separees (background, nebula, stars).
+# ============================================================================
+
+name: "M16 — L-eXtreme"
+
+ra: "18:18:48"
+dec: "-13:47:00"
+
+processing:
+  mode: "haoiii"
+  resample: "ha"
+  linear_match: true
+  linear_match_low: 0.0
+  linear_match_high: 0.92
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    use_siril_subsky: false
+    use_graxpert_post_stack: true
+    smoothing: 0.5
+    correction: "subtraction"
+    post_subsky_method: "rbf"
+    post_subsky_degree: 2
+    post_subsky_samples: 80
+    post_subsky_tolerance: 0.5
+    post_subsky_smooth: 0.8
+
+  denoise:
+    enabled: false
+    strength: 0.5
+    batch_size: 8
+    # Denoise plus fort pour eviter les petits points de bruit dans le gaz
+    # faible qui sont amplifies par le sharpening.
+    siril_denoise: true
+    siril_mod: 0.6
+
+  starnet:
+    # StarNet pour separer gaz, fond et etoiles. Export 3 TIFFs.
+    enabled: true
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true
+    # Compromis : target_bg=0.20 (entre 0.25 trop clair et 0.15 trop sombre).
+    # shadows_clip=-3.0 preserve les teintes moyennes sans trop assombrir.
+    shadows_clip: -3.0
+    target_bg: 0.20
+
+  haoiii_composition:
+    enabled: true
+    use_ha_as_luminance: true
+
+  color:
+    enabled: true
+    photometric_cc: false
+    rmgreen: true
+    rmgreen_type: "maximum"
+    # Saturation appliquee sur la couche gaz (treat_layers)
+    saturation_boost: 0.8
+    saturation_threshold: 0.5
+    hue_range: 6
+    target_hue_boost: 0.0
+    target_hue_range: 5
+    target_hue_threshold: 0.5
+    # Blue shift sur la couche gaz uniquement (rouge -> rose)
+    # Background clip plus fort sur la couche gaz : assombrit les bords pour
+    # concentrer le sharpening sur le centre lumineux de la nebuleuse.
+    blue_shift: 0.3
+    background_clip: 0.05
+
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    # sigma=0.9 (un peu plus large pour les structures du gaz, moins de bruit
+    # pointu), amount=1.2 (modere pour eviter d'amplifier les petits points).
+    sigma: 0.9
+    amount: 1.2
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

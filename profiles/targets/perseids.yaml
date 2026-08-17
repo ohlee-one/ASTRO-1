@@ -1,0 +1,79 @@
+# ============================================================================
+# PROFIL CIBLE — Perséides (pluie de météores)
+# ============================================================================
+# Photographiées au Canon 6D Mark II sur trépied fixe.
+# Registration + stack max pour avoir des étoiles ponctuelles et des météores.
+# ============================================================================
+
+name: "Perséides"
+
+processing:
+  mode: "meteors"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  rejection: "none"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "none"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: false
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    # Autostretch agressif pour révéler les météores.
+    # L'image combinée (médian + météores) a un fort contraste :
+    # le fond est très sombre (~0.035) et les météores très brillants (~0.8).
+    # Il faut un shadows_clip très négatif pour remonter le fond et
+    # un target_bg élevé pour bien étirer les mid-tones.
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: true
+    photometric_cc: false
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.8
+    saturation_threshold: 1.0
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    background_clip: 0.03
+
+  sharpening:
+    enabled: false
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

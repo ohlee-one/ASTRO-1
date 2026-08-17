@@ -664,6 +664,24 @@ def _single_post_lines(
         # Stretch
         lines += _stretch_lines(profile)
 
+        # Subsky post-stretch : retire le gradient résiduel (rouge diffus)
+        # sur l'image non-linéaire. Crucial pour les filtres tri-bande souples
+        # (L-eNhance) qui laissent passer plus de pollution lumineuse.
+        bg = profile.target.post.background_extraction
+        if bg.enabled and bg.use_graxpert_post_stack:
+            method = bg.post_subsky_method
+            lines.append(f"# Extraction gradient résiduel post-stretch (subsky {method})")
+            if method == "rbf":
+                lines.append(
+                    f"subsky -rbf -samples={bg.post_subsky_samples} "
+                    f"-tolerance={bg.post_subsky_tolerance} -smooth={bg.post_subsky_smooth}"
+                )
+            else:
+                lines.append(
+                    f"subsky {bg.post_subsky_degree} -samples={bg.post_subsky_samples} "
+                    f"-tolerance={bg.post_subsky_tolerance} -smooth={bg.post_subsky_smooth}"
+                )
+
         # Couleur + sharpening
         lines += _color_lines(profile)
         lines += _sharpening_lines(profile)
@@ -872,6 +890,129 @@ def run_startrails(
     return results
 
 
+def build_meteors_script(session_dir: Path, profile: Profile) -> str:
+    """Construit le script .ssf pour le mode meteors (pluies de météores).
+
+    Le mode meteors utilise une approche par soustraction pour isoler les
+    météores du fond de ciel et des star trails :
+
+      1. Conversion des RAW + dématriçage
+      2. Stack MAXIMUM : contient tout (étoiles trailed + météores + fond)
+      3. Stack MÉDIAN : contient le fond stable (les météores, rares,
+         sont éliminés par le médian)
+
+    La différence (max - médian) contient les météores + du bruit résiduel
+    des star trails. Un seuillage statistique (p99.9) isole les météores.
+
+    Pas de registration : sur trépied fixe en pose longue, les étoiles sont
+    déjà trailed dans chaque frame et la registration Siril échoue sur la
+    plupart des frames. L'approche par soustraction rend la registration
+    inutile : les star trails sont similaires entre le max et le médian,
+    donc s'annulent dans la différence.
+
+    Le script produit stack_max.fit et stack_med.fit dans output/.
+    """
+    folders = profile.setup.folders
+    sensor = profile.setup.sensor
+
+    lines: list[str] = [
+        f"requires {MIN_VERSION}",
+        "",
+        "# ---- Script généré automatiquement par astro-pipeline ----",
+        "# ---- Mode meteors : stack max + stack médian (soustraction) ---",
+        f"# Setup : {profile.setup.name}",
+        f"# Cible : {profile.target.name}",
+        "",
+        "# Conversion des RAW en séquence FITS",
+        f"cd {folders.lights}",
+        "convert light -out=../process",
+        "cd ../process",
+        "",
+    ]
+
+    # Dématriçage si capteur couleur
+    calibrate_options = []
+    if sensor.color:
+        calibrate_options.append("-cfa")
+        if sensor.equalize_cfa:
+            calibrate_options.append("-equalize_cfa")
+        calibrate_options.append("-debayer")
+
+    if calibrate_options:
+        lines += [
+            "# Dématriçage (capteur couleur)",
+            f"calibrate light_ {' '.join(calibrate_options)}",
+            "",
+        ]
+        light_prefix = "pp_light_"
+    else:
+        light_prefix = "light_"
+
+    # Deux stacks : max (tout) et médian (fond seul, sans météores)
+    lines += [
+        "# Stack MAXIMUM : contient tout (étoiles trailed + météores + fond)",
+        f"stack {light_prefix} max -out=../output/stack_max",
+        "",
+        "# Stack MÉDIAN : fond stable (météores éliminés par le médian)",
+        f"stack {light_prefix} med -out=../output/stack_med",
+        "",
+        "close",
+    ]
+
+    return "\n".join(lines) + "\n"
+
+
+def run_meteors(
+    session_dir: Path, profile: Profile, dry_run: bool = False
+) -> list[Path]:
+    """Exécute le mode meteors : conversion + stack max + stack médian.
+
+    Retourne la liste des fichiers empilés (stack_max.fit et stack_med.fit).
+    La soustraction et l'isolation des météores se fait dans le pipeline
+    (Python), pas ici.
+    """
+    binary = find_binary()
+    if binary is None:
+        raise SirilNotFoundError(
+            "siril-cli est introuvable.\n"
+            "Installe-le avec :  brew install --cask siril\n"
+        )
+
+    process_dir = session_dir / "process"
+    output_dir = session_dir / "output"
+    process_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
+
+    script_path = process_dir / "generated.ssf"
+    script_path.write_text(build_meteors_script(session_dir, profile), encoding="utf-8")
+
+    results = [output_dir / "stack_max.fit", output_dir / "stack_med.fit"]
+
+    if dry_run:
+        return results
+
+    command = [str(binary), "-d", str(session_dir), "-s", str(script_path)]
+    process = subprocess.run(command, capture_output=True, text=True, check=False)
+
+    if process.returncode != 0:
+        raise SirilExecutionError(
+            f"Siril s'est arrêté avec le code {process.returncode} "
+            f"(meteors : conversion + stacks).\n"
+            f"Script exécuté : {script_path}\n"
+            f"--- Sortie Siril ---\n{process.stdout[-3000:]}\n{process.stderr[-2000:]}"
+        )
+
+    missing = [path for path in results if not path.exists()]
+    if missing:
+        names = ", ".join(path.name for path in missing)
+        raise SirilExecutionError(
+            f"Siril s'est terminé sans erreur mais ces fichiers manquent : {names}\n"
+            f"{process.stdout[-3000:]}"
+        )
+
+    return results
+
+
 def final_output_name(profile: Profile) -> str:
     """Nom de base du fichier final produit par la phase finale."""
     if profile.target.processing.mode == "haoiii":
@@ -1041,6 +1182,15 @@ def run_post(
             scnr_type = "1" if color.rmgreen_type == "maximum" else "0"
             treat_lines.append(f"# Correction du vert sur la galaxie (SCNR {color.rmgreen_type})")
             treat_lines.append(f"rmgreen {scnr_type}")
+        # Saturation sur la galaxie (les gaz, sans toucher le fond ni les etoiles)
+        if color.saturation_boost > 0:
+            treat_lines.append(f"# Saturation des gaz ({color.saturation_boost:.1f})")
+            treat_lines.append(f"satu {color.saturation_boost:.2f} {color.saturation_threshold:.1f} {color.hue_range}")
+        # Blue shift sur la galaxie : eclaircit le canal bleu uniquement (channel=2)
+        # pour faire virer le rouge Ha vers le rose/magenta.
+        if color.blue_shift > 0:
+            treat_lines.append(f"# Blue shift (rouge -> rose, {color.blue_shift:.2f})")
+            treat_lines.append(f"mtf 0.0 {1.0 - color.blue_shift:.2f} 1.0 2")
         # Background clip sur la galaxie
         if color.background_clip > 0:
             treat_lines.append(f"# Assombrissement du fond (clip {color.background_clip:.3f})")
@@ -1113,29 +1263,40 @@ def run_post(
             else:
                 data_bg_denoised = ch_denoised
 
+        # Sauvegarder les 3 couches en FITS separees pour export TIFF.
+        hdr = hdul_sl[0].header
+        fits.writeto(output_dir / "background.fit", data_bg_denoised.astype(">f4"), hdr, overwrite=True)
+        fits.writeto(output_dir / "nebula.fit", data_galaxy_proc.astype(">f4"), hdr, overwrite=True)
+        fits.writeto(output_dir / "stars.fit", data_starmask.astype(">f4"), hdr, overwrite=True)
+
         # Recombinaison: fond lissé + galaxie traitée + étoiles traitées
         combined = data_bg_denoised + data_galaxy_proc
         combined = np.maximum(combined, data_starmask)
 
         combined = combined.astype(">f4")
-        hdr = hdul_sl[0].header
         fits.writeto(output_dir / "final.fit", combined, hdr, overwrite=True)
 
-        # Export TIFF via Siril (script séparé pour l'export uniquement).
+        # Export TIFF des 3 couches + image finale combinee via Siril.
         if profile.target.post.export.enabled:
             export_script = process_dir / "export.ssf"
             if export_ext == "tif":
-                export_cmd = f"savetif {export_name} -deflate"
+                export_cmd = "savetif {name} -deflate"
             elif export_ext == "png":
-                export_cmd = f"savepng {export_name}"
+                export_cmd = "savepng {name}"
             else:
-                export_cmd = f"savejpg {export_name}"
+                export_cmd = "savejpg {name}"
             export_lines = [
                 f"requires {MIN_VERSION}",
                 "",
                 "cd output",
                 "load final",
-                export_cmd,
+                export_cmd.format(name=export_name),
+                "load background",
+                export_cmd.format(name="background"),
+                "load nebula",
+                export_cmd.format(name="nebula"),
+                "load stars",
+                export_cmd.format(name="stars"),
             ]
             export_script.write_text("\n".join(export_lines) + "\n", encoding="utf-8")
             cmd_export = [str(binary), "-d", str(session_dir), "-s", str(export_script)]

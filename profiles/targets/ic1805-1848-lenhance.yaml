@@ -1,0 +1,116 @@
+# ============================================================================
+# PROFIL CIBLE — IC 1805 + IC 1848 (Coeur et Ame) au filtre L-eNhance
+#
+# L'Optolong L-eNhance est un filtre TRI-BANDE souple (~24nm) : Ha, OIII, HBeta.
+# Plus permissif que le L-eXtreme (7nm), il laisse passer plus de signal mais
+# aussi plus de pollution lumineuse. Avantage : capte le HBeta (bleu) en plus
+# du Ha et OIII, ce qui permet d'obtenir de belles teintes cyan/bleu.
+#
+# Strategies pour faire ressortir le cyan/bleu :
+#   - Saturation ciblee sur les teintes cyan (hue_range=3)
+#   - blue_shift leger pour eclairecir le canal bleu dans les zones rouges
+#   - Stretch GHS pour un fond propre + traitement par couches (StarNet)
+# ============================================================================
+
+name: "IC 1805 + IC 1848 — L-eNhance"
+
+ra: "02:33:00"
+dec: "+63:20:00"
+
+processing:
+  mode: "haoiii"
+  resample: "ha"
+  linear_match: true
+  linear_match_low: 0.0
+  linear_match_high: 0.92
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    # L-eNhance laisse passer plus de pollution que le L-eXtreme.
+    # Pas de seqsubsky avant empilement : les images CFA calibrees contiennent
+    # des pixels negatifs (light - dark) que seqsubsky ne peut pas traiter.
+    # GraXpert (post-empilement) s'en charge sur l'image RGB finale.
+    use_siril_subsky: false
+    subsky_method: "poly"
+    subsky_degree: 1
+    subsky_samples: 30
+    subsky_tolerance: 1.0
+    subsky_smooth: 0.5
+    use_graxpert_post_stack: true
+    smoothing: 0.5
+    correction: "subtraction"
+    post_subsky_method: "rbf"
+    post_subsky_degree: 2
+    post_subsky_samples: 80
+    post_subsky_tolerance: 0.5
+    post_subsky_smooth: 0.8
+
+  denoise:
+    enabled: false
+    strength: 0.5
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    # StarNet active : traitement par couches pour separer gaz, fond et etoiles.
+    # Export de 3 TIFFs separees (background.tif, nebula.tif, stars.tif).
+    enabled: true
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    # Autostretch : les nébuleuses en bande étroite ont besoin d'un stretch
+    # plus agressif que les galaxies. shadows_clip=-2.8 preserve les extensions
+    # faibles, target_bg=0.25 donne un fond moyen equilibre.
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  haoiii_composition:
+    enabled: true
+    use_ha_as_luminance: true
+
+  color:
+    enabled: true
+    photometric_cc: false
+    rmgreen: true
+    rmgreen_type: "maximum"
+    # Saturation appliquee uniquement sur la couche gaz (treat_layers)
+    saturation_boost: 1.2
+    saturation_threshold: 0.5
+    hue_range: 6
+    target_hue_boost: 0.0
+    target_hue_range: 5
+    target_hue_threshold: 0.5
+    # Blue shift applique uniquement sur la couche gaz (treat_layers)
+    # pour faire virer le rouge Ha vers le rose/magenta.
+    blue_shift: 0.3
+    background_clip: 0.04
+
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.8
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

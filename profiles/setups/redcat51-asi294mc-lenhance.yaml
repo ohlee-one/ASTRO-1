@@ -1,0 +1,36 @@
+# ============================================================================
+# PROFIL SETUP — William Optics RedCat 51 + ZWO ASI294MC Pro
+#
+# Filtre : Optolong L-eNhance (tri-bande souple, Ha/OIII/HBeta, ~24nm)
+# Monture : SkyWatcher EQM-35 Pro
+# Guidage : ASI120MM Mini + lunette ZWO Mini 30mm
+# Acquisition : ASIAIR PRO
+# ============================================================================
+
+name: "RedCat 51 + ASI294MC Pro (L-eNhance)"
+
+sensor:
+  color: true
+  bayer_pattern: "auto"
+  equalize_cfa: true
+
+optics:
+  focal_length_mm: 250
+  aperture_mm: 51
+  pixel_size_um: 4.63
+
+folders:
+  lights: "lights"
+  darks: "darks"
+  flats: "flats"
+  biases: "biases"
+
+calibration:
+  # Le MasterDark de l'ASIAIR INCLUT deja le bias. Ne pas activer use_biases
+  # sinon Siril soustrait le bias deux fois (dark - bias - bias = image negative).
+  use_biases: false
+
+  # Masters pre-empiles par l'ASIAIR (MasterDark_, MasterFlat_, MasterBias_)
+  use_premade_masters: true
+
+  cosmetic_correction: true

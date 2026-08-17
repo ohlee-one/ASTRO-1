@@ -1,0 +1,87 @@
+# ============================================================================
+# PROFIL CIBLE — Polaris (étoile) au filtre L-eNhance
+# ============================================================================
+# Polaris est une étoile brillante. Pas d'extraction bande étroite ni de
+# traitement par couches. RGB classique avec calibration.
+# ============================================================================
+
+name: "Polaris — L-eNhance"
+
+ra: "02:31:49"
+dec: "+89:15:50"
+
+processing:
+  mode: "rgb"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  rejection: "winsorized"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "addscale"
+
+registration:
+  min_stars: 10
+
+post:
+  background_extraction:
+    enabled: true
+    use_siril_subsky: false
+    use_graxpert_post_stack: true
+    smoothing: 0.5
+    correction: "subtraction"
+    post_subsky_method: "rbf"
+    post_subsky_degree: 2
+    post_subsky_samples: 80
+    post_subsky_tolerance: 0.5
+    post_subsky_smooth: 0.8
+
+  denoise:
+    enabled: false
+    strength: 0.5
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    # StarNet pour separer etoiles et fond. Export 2 TIFFs separees.
+    enabled: true
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: true
+    photometric_cc: false
+    rmgreen: true
+    rmgreen_type: "average"
+    saturation_boost: 0.6
+    saturation_threshold: 1.0
+    hue_range: 6
+    target_hue_boost: 0.0
+    target_hue_range: 5
+    target_hue_threshold: 0.5
+    blue_shift: 0.0
+    background_clip: 0.05
+
+  sharpening:
+    enabled: true
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

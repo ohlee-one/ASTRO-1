@@ -1,0 +1,103 @@
+# ============================================================================
+# TEMPLATE — Météores (Perséides, Géminides, etc.)
+# ============================================================================
+# Pour les pluies de météores photographiées sur trépied fixe.
+#
+# Contrairement au mode star trails, les étoiles doivent être PONCTUELLES
+# (pas de traînées). Pour cela :
+#   1. Conversion des RAW en FITS + dématriçage
+#   2. Registration (alignement sur les étoiles entre les frames)
+#   3. Empilement par maximum (stack max)
+#
+# Les étoiles sont alignées donc ponctuelles. Les météores restent visibles
+# car ils n'apparaissent qu'une seule fois, à des positions aléatoires non
+# alignees avec les autres frames.
+#
+# Certaines frames peuvent échouer à la registration (étoiles trop trailed
+# en pose longue sur trépied fixe). Siril ignore ces frames automatiquement.
+#
+# Copie ce fichier dans profiles/targets/ et renomme-le selon ta cible.
+# ============================================================================
+
+name: "Météores (template)"
+
+processing:
+  mode: "meteors"
+  resample: "none"
+  linear_match: false
+
+stacking:
+  # Pas de rejection en mode meteors (stack max)
+  rejection: "none"
+  sigma_low: 3.0
+  sigma_high: 3.0
+  normalization: "none"
+
+registration:
+  # Minimum d'étoiles détectées pour qu'une frame soit alignée.
+  # Sur trépied fixe avec poses longues, certaines frames peuvent avoir
+  # des étoiles trop trailed pour la détection. Elles seront ignorées.
+  min_stars: 10
+
+post:
+  background_extraction:
+    # Pas d'extraction de fond pour les météores
+    enabled: false
+    smoothing: 0.3
+    correction: "subtraction"
+
+  denoise:
+    enabled: false
+    strength: 0.3
+    batch_size: 8
+    siril_denoise: false
+    siril_mod: 0.7
+
+  starnet:
+    # Pas de StarNet pour les météores
+    enabled: false
+    upscale: false
+    stretch_linear: false
+
+  stretch:
+    enabled: true
+    # Autostretch agressif pour révéler les météores.
+    # L'image combinée (médian + météores) a un fort contraste :
+    # le fond est très sombre (~0.035) et les météores très brillants (~0.8).
+    # Il faut un shadows_clip très négatif pour remonter le fond et
+    # un target_bg élevé pour bien étirer les mid-tones.
+    method: "autostretch"
+    linked: true
+    shadows_clip: -2.8
+    target_bg: 0.25
+
+  color:
+    enabled: true
+    photometric_cc: false
+    # rmgreen pour nettoyer la pollution lumineuse verte
+    rmgreen: true
+    rmgreen_type: "average"
+    # Saturation modérée pour les couleurs des météores et étoiles
+    saturation_boost: 0.8
+    saturation_threshold: 1.0
+    hue_range: 6
+    target_hue_boost: 0.0
+    blue_shift: 0.0
+    # Assombrir le fond pour faire ressortir les météores
+    background_clip: 0.03
+
+  sharpening:
+    # Pas de sharpening (amplifierait le bruit du fond)
+    enabled: false
+    method: "unsharp"
+    sigma: 1.0
+    amount: 0.5
+
+  star_reduction:
+    enabled: false
+    amount: 0.5
+
+  export:
+    enabled: true
+    format: "tiff"
+    deflate: true

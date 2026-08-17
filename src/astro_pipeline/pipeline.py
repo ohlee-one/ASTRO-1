@@ -22,6 +22,14 @@ Mode Star trails :
   2. Siril    : stretch, couleur, export
   Pas de calibration, pas d'alignement, pas de GraXpert, pas de StarNet.
 
+Mode Météores (Perséides, Géminides...) :
+  1. Siril    : conversion RAW + dématriçage + stack max + stack médian
+  2. Python   : soustraction (max - médian), seuillage p99.9, combinaison
+  3. Siril    : stretch, couleur, export
+  Pas de calibration, pas de registration, pas de GraXpert, pas de StarNet.
+  Les star trails s'annulent dans la différence (similaires entre max et médian).
+  Les météores restent car ils n'apparaissent qu'une fois (absents du médian).
+
 La différence clé : en mode haoiii, le débruitage IA de GraXpert ne peut pas
 fonctionner sur les couches monochromes (1 canal). Il faut recomposer en RGB
 (3 canaux) avant de débruiter.
@@ -32,6 +40,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import astropy.io.fits as fits
+import numpy as np
 from rich.console import Console
 
 from astro_pipeline.config import Profile
@@ -63,6 +73,60 @@ class PipelineResult:
 
 class SessionError(Exception):
     pass
+
+
+def _isolate_meteors(
+    stacked: list[Path], output_dir: Path, dry_run: bool = False
+) -> Path | None:
+    """Isole les météores par soustraction (max - médian) et seuillage.
+
+    Le stack max contient tout (étoiles trailed + météores + fond).
+    Le stack médian contient le fond stable (météores éliminés par le médian
+    car ils n'apparaissent qu'une fois sur N frames).
+
+    La différence (max - médian) contient les météores + du bruit résiduel
+    des star trails. Un seuillage au p99.9 isole les météores (signaux les
+    plus intenses) en éliminant le bruit de fond des trails.
+
+    Le résultat est combiné avec le stack médian (fond de ciel + étoiles)
+    pour produire une image naturelle où les météores sont visibles
+    par-dessus le ciel étoilé.
+    """
+    if dry_run or len(stacked) < 2:
+        return None
+
+    max_path = stacked[0]  # stack_max.fit
+    med_path = stacked[1]  # stack_med.fit
+
+    if not max_path.exists() or not med_path.exists():
+        return None
+
+    max_data = fits.getdata(str(max_path)).astype(np.float32)
+    med_data = fits.getdata(str(med_path)).astype(np.float32)
+
+    # Différence = max - médian (signal positif uniquement)
+    diff = np.maximum(max_data - med_data, 0)
+
+    # Seuillage au p99.9 : garde uniquement les 0.1% les plus brillants
+    # Les météores sont des outliers (1 frame sur N), les trails sont diffus
+    diff_gray = np.max(diff, axis=0)
+    nonzero = diff_gray[diff_gray > 1e-6]
+    if len(nonzero) < 100:
+        return None
+    p999 = np.percentile(nonzero, 99.9)
+
+    # Masquer tout ce qui est en dessous du seuil (bruit de trails)
+    meteor_signal = np.where(diff > p999, diff, 0).astype(np.float32)
+
+    # Combiner : fond de ciel (médian) + météores amplifiés
+    # ×3 pour rendre les météores bien visibles par-dessus le fond
+    combined = med_data + meteor_signal * 3.0
+
+    # Sauver le FITS combiné pour que Siril puisse le stretcher
+    result_path = output_dir / "meteors_combined.fit"
+    fits.writeto(str(result_path), combined.astype(np.float32), overwrite=True)
+
+    return result_path
 
 
 def validate_session(session_dir: Path, profile: Profile) -> None:
@@ -125,11 +189,14 @@ def run(
     mode = profile.target.processing.mode
     is_haoiii = mode == "haoiii"
     is_startrails = mode == "startrails"
+    is_meteors = mode == "meteors"
     mode_label = mode
     if is_haoiii:
         mode_label += " (extraction bande étroite Ha + OIII)"
     elif is_startrails:
         mode_label += " (empilement par maximum, pas de registration)"
+    elif is_meteors:
+        mode_label += " (registration + empilement par maximum, météores isolés)"
     logger.info(f"Mode    : {mode_label}")
     logger.info(f"Log     : {logger.log_path}")
 
@@ -179,6 +246,76 @@ def run(
         return PipelineResult(
             stacked=stacked,
             processed=stacked,
+            exported=exported,
+            scripts=scripts,
+            commands=commands,
+            log_path=logger.log_path,
+        )
+
+    # === Mode meteors : soustraction max - médian pour isoler les météores =====
+    # Pas de calibration, pas de GraXpert, pas de StarNet, pas de registration.
+    # 1. Siril : conversion + dématriçage + stack max + stack médian
+    # 2. Python : soustraction (max - médian), seuillage p99.9, combinaison
+    # 3. Siril : stretch + couleur + export
+    #
+    # Les star trails sont similaires entre le max et le médian, donc
+    # s'annulent dans la différence. Les météores n'apparaissent qu'une fois,
+    # donc sont dans le max mais pas dans le médian : ils restent dans la diff.
+    if is_meteors:
+        total_steps = 3
+        step = 0
+        scripts: list[Path] = []
+        commands: list[list[str]] = []
+
+        # Étape 1 : Siril — conversion + stack max + stack médian
+        step += 1
+        logger.step(step, total_steps, "Siril",
+                    "conversion RAW + stack max + stack médian")
+        stacked = siril.run_meteors(session_dir, profile, dry_run=dry_run)
+        script1 = session_dir / "process" / "generated.ssf"
+        scripts.append(script1)
+        logger.info(f"      Script : {script1}")
+        for path in stacked:
+            if dry_run:
+                logger.info(f"      → {path.name}")
+            else:
+                logger.success(path.name)
+
+        # Étape 2 : Python — soustraction + isolation des météores
+        step += 1
+        logger.step(step, total_steps, "Python",
+                    "soustraction max - médian, isolation des météores")
+        meteor_path = _isolate_meteors(stacked, output_dir, dry_run=dry_run)
+        if meteor_path:
+            if dry_run:
+                logger.info(f"      → {meteor_path.name}")
+            else:
+                logger.success(meteor_path.name)
+        processed = [meteor_path] if meteor_path else stacked
+
+        # Étape 3 : Siril — stretch + couleur + export
+        step += 1
+        logger.step(step, total_steps, "Siril", "stretch, couleur, export")
+        exported = siril.run_post(session_dir, profile, processed, dry_run=dry_run)
+        script_post = session_dir / "process" / "post_processing.ssf"
+        scripts.append(script_post)
+        logger.info(f"      Script : {script_post}")
+
+        if exported:
+            if dry_run:
+                logger.info(f"      → {exported.name}")
+            else:
+                logger.success(exported.name)
+        else:
+            logger.warning("Export désactivé dans le profil")
+
+        logger.rule("Terminé" if not dry_run else "Simulation terminée")
+        logger.info(f"Log complet : {logger.log_path}")
+        logger.close()
+
+        return PipelineResult(
+            stacked=stacked,
+            processed=processed,
             exported=exported,
             scripts=scripts,
             commands=commands,

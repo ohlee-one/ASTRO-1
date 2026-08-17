@@ -44,6 +44,7 @@ CAMERAS: dict[str, tuple[bool, float]] = {
     # Canon / Nikon DSLR
     "Canon 600D": (True, 4.3),
     "Canon 6D": (True, 6.55),
+    "Canon 6D Mark II": (True, 5.97),
     "Canon R5": (True, 4.39),
     "Canon R6": (True, 4.39),
     "Nikon D5300": (True, 3.92),
@@ -86,6 +87,7 @@ TARGETS: dict[str, str] = {
     "Comète": "comet-rgb",
     "Reste de supernova (Veil, etc.)": "snr-narrowband",
     "Star trails (traînées d'étoiles)": "star-trails",
+    "Météores (Perséides, Géminides...)": "meteors",
 }
 
 TEMPLATES_DIR = PROFILES_DIR.parent / "templates"
@@ -289,6 +291,7 @@ def wizard_command() -> None:
         "Amas d'étoiles RGB (template)",
         "Comète (template)",
         "Reste de supernova bande étroite (template)",
+        "Météores (template)",
     ]:
         content = content.replace(f'name: "{old_name}"', f'name: "{target_name}"')
 

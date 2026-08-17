@@ -1,11 +1,11 @@
 # ============================================================================
-# PROFIL SETUP — Canon DSLR (star trails)
+# PROFIL SETUP — Canon DSLR (star trails & météores)
 # ============================================================================
 # Profil générique pour appareil photo Canon DSLR produisant des CR2.
 # Siril lit les métadonnées du RAW automatiquement (dimensions, Bayer pattern).
 # ============================================================================
 
-name: "Canon DSLR (star trails)"
+name: "Canon DSLR"
 
 sensor:
   color: true
@@ -15,7 +15,7 @@ sensor:
 optics:
   focal_length_mm: 50
   aperture_mm: 35
-  pixel_size_um: 5.95
+  pixel_size_um: 5.97
 
 folders:
   lights: "lights"

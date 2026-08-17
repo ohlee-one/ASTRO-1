@@ -89,7 +89,7 @@ class Registration(BaseModel):
 
 
 class Processing(BaseModel):
-    """Mode de traitement : couleur classique, bande étroite, ou star trails.
+    """Mode de traitement : couleur classique, bande étroite, star trails, ou meteors.
 
     - "rgb"       : dématriçage classique -> une seule image couleur.
     - "haoiii"    : PAS de dématriçage. Les couches Ha (pixels rouges) et OIII
@@ -100,9 +100,15 @@ class Processing(BaseModel):
                     converties en FITS puis empilées par maximum pixel-wise
                     (chaque pixel = la valeur la plus élevée de toutes les
                     frames). Les étoiles tracent leurs trajectoires.
+    - "meteors"   : Pour les pluies de météores (Perséides, Géminides...).
+                    Registration (alignement sur les étoiles) puis empilement
+                    par maximum. Les étoiles sont ponctuelles (pas de star
+                    trails) et les météores restent visibles car ils
+                    n'apparaissent qu'une seule fois, à des positions
+                    aléatoires non alignees. Pas de calibration.
     """
 
-    mode: Literal["rgb", "haoiii", "startrails"] = "rgb"
+    mode: Literal["rgb", "haoiii", "startrails", "meteors"] = "rgb"
 
     # Le Ha ne provient que d'1 pixel sur 4 : il sort en demi-résolution,
     # alors que l'OIII sort en pleine résolution. Il faut les remettre à la
